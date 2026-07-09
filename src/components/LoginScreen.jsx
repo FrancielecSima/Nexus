@@ -23,11 +23,6 @@ function LoginScreen({ onSubmitLogin, stats }){
           <h1>Um único sistema para <em>operar</em> e <em>atender</em>.</h1>
           <p>Controle financeiro completo para a equipe e um portal dedicado para cada cliente acompanhar seus chamados — tudo com a identidade da sua marca.</p>
         </div>
-        <div className="login-stats">
-          <div><b>{stats.clientes}</b><span>clientes ativos</span></div>
-          <div><b>{stats.encerrados}</b><span>chamados encerrados</span></div>
-          <div><b>{stats.sla}</b><span>SLA médio</span></div>
-        </div>
       </div>
 
       <div className="login-form-panel">
@@ -54,13 +49,7 @@ function LoginScreen({ onSubmitLogin, stats }){
             <button type="submit" className="btn-primary">Entrar</button>
           </form>
 
-          <div className="divider-text">acesso rápido de demonstração</div>
-          <div className="quick-row">
-            <button type="button" className="btn-quick" onClick={()=>{ setRoleChoice('empresa'); onSubmitLogin('empresa'); }}>🏢 Entrar como Empresa</button>
-            <button type="button" className="btn-quick" onClick={()=>{ setRoleChoice('cliente'); onSubmitLogin('cliente'); }}>👤 Entrar como Cliente</button>
-          </div>
-
-          <p className="login-foot">Protótipo de demonstração — NEXUS © 2026</p>
+          <p className="login-foot">NEXUS © 2026 - Desenvolvido por Growp Brasil</p>
         </div>
       </div>
     </div>
