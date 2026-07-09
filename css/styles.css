@@ -39,10 +39,7 @@
     min-height:100vh;
     display:grid;
     grid-template-columns: 1.05fr 1fr;
-    display: flex;
-    justify-content: center; /* Horizontal */
-    align-items: center;     /* Vertical */
-
+    
   }
   @media (max-width: 900px){ #login-screen{ grid-template-columns: 1fr; } .login-visual{ display:none; } }
 
