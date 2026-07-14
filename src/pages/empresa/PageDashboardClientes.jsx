@@ -16,6 +16,11 @@ function PageDashboardClientes({ clientes, tickets, onPersonalizar }){
     return { label:'Concluído', cls:'b-green', open };
   }
 
+  const comSla = tickets.filter(t=>t.primeiraRespostaEm);
+  const slaMedioMs = comSla.length ? comSla.reduce((s,t)=>s+(new Date(t.primeiraRespostaEm)-new Date(t.criadoEm)),0)/comSla.length : null;
+  const avaliados = tickets.filter(t=>t.avaliacao);
+  const satisfacaoMedia = avaliados.length ? (avaliados.reduce((s,t)=>s+t.avaliacao,0)/avaliados.length) : null;
+
   const totalT = Math.max(1, tickets.length);
   const donutParts = [
     { label:'Ativos', val:emAtendimento, color:'var(--rosa)' },
@@ -33,8 +38,8 @@ function PageDashboardClientes({ clientes, tickets, onPersonalizar }){
       <div className="grid g4" style={{marginBottom:18}}>
         <Kpi label="Total de Clientes" value={String(totalClientes)} delta="cadastrados" dir="up"/>
         <Kpi label="Chamados Abertos" value={String(abertos)} delta="em andamento" dir="down" tone="pink"/>
-        <Kpi label="Chamados Encerrados" value={String(encerrados)} delta="total" dir="up"/>
-        <Kpi label="SLA Médio de Atendimento" value="3h 40m" delta="ilustrativo" dir="up" tone="pink"/>
+        <Kpi label="SLA Médio (1ª resposta)" value={slaMedioMs!=null?fmtDuracao(slaMedioMs):'—'} delta="calculado em tempo real" dir="up" tone="pink"/>
+        <Kpi label="Satisfação Média (CSAT)" value={satisfacaoMedia!=null? satisfacaoMedia.toFixed(1)+' / 5' : '—'} delta={avaliados.length+' avaliação(ões)'} dir="up"/>
       </div>
       <div className="grid g2">
         <div className="card">

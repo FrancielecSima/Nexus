@@ -1,0 +1,18 @@
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# Variáveis de ambiente / segredos
+# (a chave "anon public" do Supabase pode ficar no código normalmente —
+# isso aqui é só precaução caso um dia exista uma service_role key local)
+.env
+.env.local
+.env*.local
+
+# Node (caso um dia adicione alguma ferramenta via npm)
+node_modules/

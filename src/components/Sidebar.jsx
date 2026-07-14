@@ -2,9 +2,11 @@
    Sidebar — navegação lateral (empresa/cliente)
    Depende de: NAV_EMPRESA/NAV_CLIENTE (NavConfig.js), ícones (Icons.jsx)
 ============================================================ */
-function Sidebar({ role, page, expandedGroups, toggleGroup, goPage, branding, clientName, onLogout }){
+function Sidebar({ role, page, expandedGroups, toggleGroup, goPage, branding, clientName, onLogout, staffName, staffCargo }){
   const nav = role==='empresa' ? NAV_EMPRESA : NAV_CLIENTE;
-  const who = role==='empresa' ? {av:'CS', name:'Carla Silva', role:'Suporte Técnico'} : {av:branding.initial, name:clientName, role:branding.name};
+  const who = role==='empresa'
+    ? { av:(staffName||'EQ').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase(), name:staffName||'Equipe', role:staffCargo||'Equipe interna' }
+    : { av:branding.initial, name:clientName, role:branding.name };
 
   return (
     <aside className="sidebar">

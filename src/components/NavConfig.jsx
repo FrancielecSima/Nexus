@@ -8,7 +8,9 @@ const NAV_EMPRESA = [
       { id:'fin-caixa', label:'Caixa' },
       { id:'fin-orcamentos', label:'Orçamentos' },
       { id:'fin-servicos', label:'Serviços' },
+      { id:'fin-gastos', label:'Gastos' },
       { id:'fin-chamados', label:'Chamados' },
+      { id:'fin-auditoria', label:'Auditoria' },
     ] },
   { id:'clientes', label:'Dashboard Clientes', icon:IconGrid, submenu:[
       { id:'personalizacao', label:'Personalização' },
