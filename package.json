@@ -1,3 +1,6 @@
 {
-  "description": "Sistema desenvolvido para gerenciamento de informações, oferecendo uma interface intuitiva, organização de dados e recursos para facilitar as atividades do usuário."
+  "description": "Sistema desenvolvido para gerenciamento de informações, oferecendo uma interface intuitiva, organização de dados e recursos para facilitar as atividades do usuário.",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.110.7"
+  }
 }
