@@ -3,9 +3,9 @@
 ============================================================ */
 function LoginScreen({ onSubmitLogin, stats, equipe }){
   const [roleChoice, setRoleChoice] = useState('empresa');
-  const [staffId, setStaffId] = useState(equipe[0].id);
-  const [email, setEmail] = useState('ana@souzatecnologia.com');
-  const [senha, setSenha] = useState('12345678');
+  const [staffId, setStaffId] = useState(equipe[0]?.id || '');
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
   const [error, setError] = useState(false);
 
   function submit(e){
