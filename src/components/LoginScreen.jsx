@@ -36,16 +36,6 @@ function LoginScreen({ onSubmitLogin, stats, equipe }){
             <button type="button" className={roleChoice==='cliente'?'active':''} onClick={()=>setRoleChoice('cliente')}>Sou Cliente</button>
           </div>
 
-          {roleChoice==='empresa' && (
-            <div className="field" style={{marginBottom:16}}>
-              <label>Quem é você?</label>
-              <select className="select-input" value={staffId} onChange={e=>setStaffId(e.target.value)}>
-                {equipe.map(p=><option key={p.id} value={p.id}>{p.nome} — {p.cargo}</option>)}
-              </select>
-            </div>
-          )}
-
-          {error && <div className="login-error" style={{display:'block'}}>Informe e-mail e senha para continuar.</div>}
 
           <form onSubmit={submit}>
             <div className="field">
