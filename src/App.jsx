@@ -3,17 +3,19 @@
 ============================================================ */
 function App(){
   const [loggedIn,setLoggedIn] = useState(false);
+  const [authChecked,setAuthChecked] = useState(false);
+  const [authUser,setAuthUser] = useState(null);
   const [role,setRole] = useState('empresa');
   const [page,setPage] = useState('financeiro');
   const [expandedGroups,setExpandedGroups] = useState({financeiro:true, clientes:true});
-  const clientName = 'Ana Souza';
+  const [clientName,setClientName] = useState('');
   const [branding,setBranding] = useState({ name:'Souza Tecnologia', initial:'S', primary:'#FF6A2B', secondary:'#1E1F24' });
 
   const [clientes,setClientes] = useState(initialClientes);
   const [servicos,setServicos] = useState(initialServicos);
   const [contas,setContas] = useState(initialContas);
   const [equipe] = useState(initialEquipe);
-  const [currentStaffId,setCurrentStaffId] = useState(initialEquipe[0].id);
+  const [currentStaffId,setCurrentStaffId] = useState(null);
   const [tickets,setTickets] = useState(initialTickets);
   const [caixa,setCaixa] = useState(initialCaixa);
   const [orcamentos,setOrcamentos] = useState(initialOrcamentos);
@@ -31,10 +33,88 @@ function App(){
   const [personalizacaoSelectedId,setPersonalizacaoSelectedId] = useState(initialClientes[0].id);
   const [pendingAccount,setPendingAccount] = useState(null);
 
-  // ---------- Persistência local (interina, até a migração para Supabase) ----------
-  // Guarda tudo no navegador para sobreviver a um F5. Isso NÃO substitui um banco de
-  // verdade (fica só neste navegador/computador), mas resolve o "some tudo ao atualizar
-  // a página" enquanto o projeto Supabase não é conectado.
+  // ---------- Autenticação real (Supabase Auth) ----------
+  // Restaura a sessão ao carregar a página e escuta mudanças de login/logout
+  // (inclusive se o usuário sair em outra aba, ou o token expirar).
+  useEffect(()=>{
+    supabaseClient.auth.getSession().then(({ data })=>{
+      handleAuthChange(data.session);
+      setAuthChecked(true);
+    });
+    const { data: listener } = supabaseClient.auth.onAuthStateChange((_event, session)=>{
+      handleAuthChange(session);
+    });
+    return ()=>{ listener.subscription.unsubscribe(); };
+  },[]);
+
+  async function handleAuthChange(session){
+    if(!session){
+      setAuthUser(null);
+      setLoggedIn(false);
+      return;
+    }
+    setAuthUser(session.user);
+
+    const { data: profile, error: profileErr } = await supabaseClient
+      .from('profiles').select('*').eq('id', session.user.id).single();
+
+    if(profileErr || !profile){
+      showToast('Não encontrei um perfil para este usuário. Peça para a empresa te cadastrar.');
+      await supabaseClient.auth.signOut();
+      return;
+    }
+
+    if(profile.must_change_password){
+      setPendingAccount({ id: session.user.id, nome: profile.nome });
+      return;
+    }
+
+    if(profile.role === 'empresa'){
+      setRole('empresa');
+      setCurrentStaffId(session.user.id);
+      setLoggedIn(true);
+      setPage('financeiro');
+    } else {
+      const { data: cliente } = await supabaseClient
+        .from('clientes').select('*').eq('auth_user_id', session.user.id).single();
+      if(cliente){
+        setClientName(cliente.nome);
+        setBranding({ name: cliente.empresa, initial: cliente.sigla, primary: cliente.cor_primaria, secondary: cliente.cor_secundaria });
+      }
+      setRole('cliente');
+      setLoggedIn(true);
+      setPage('inicio');
+    }
+  }
+
+  async function attemptLogin(email, senha){
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password: senha });
+    if(error){ return { error: 'E-mail ou senha inválidos.' }; }
+    return {};
+  }
+
+  async function confirmNewPassword(newPass){
+    const { error } = await supabaseClient.auth.updateUser({ password: newPass });
+    if(error){ showToast('Erro ao definir senha: ' + error.message); return; }
+    await supabaseClient.from('profiles').update({ must_change_password: false }).eq('id', pendingAccount.id);
+    const { data } = await supabaseClient.auth.getSession();
+    setPendingAccount(null);
+    await handleAuthChange(data.session);
+    showToast('Senha definida com sucesso!');
+  }
+
+  async function logout(){
+    await supabaseClient.auth.signOut();
+    setLoggedIn(false);
+    setAuthUser(null);
+    setNotifOpen(false);
+  }
+
+  // ---------- Persistência local (interina, até migrarmos cada tela para o Supabase) ----------
+  // Isto ainda cobre só as LISTAS de dados (clientes, tickets, caixa...), que por enquanto
+  // continuam vindo do seedData.js. O login acima já é 100% real via Supabase Auth.
+  // Guarda no navegador para sobreviver a um F5, mas NÃO é um banco de verdade — é o próximo
+  // pedaço a ser migrado.
   const hydrated = useRef(false);
   useEffect(()=>{
     try {
@@ -99,32 +179,6 @@ function App(){
       if(role==='empresa') setEmpresaNotifs(prev=>prev.map(n=>({...n,lido:true})));
       else setClienteNotifs(prev=>prev.map(n=>({...n,lido:true})));
     }
-  }
-
-  function attemptLogin(chosenRole, staffId){
-    if(chosenRole==='empresa'){
-      if(staffId) setCurrentStaffId(staffId);
-      setLoggedIn(true); setRole('empresa'); setPage('financeiro');
-      return;
-    }
-    const acc = contas.find(a=>a.nome===clientName);
-    if(acc && acc.primeiroAcesso){ setPendingAccount(acc); }
-    else { loginAsCliente(); }
-  }
-  function loginAsCliente(){
-    const c = clientes.find(x=>x.nome===clientName) || clientes[0];
-    if(c) setBranding({ name:c.empresa, initial:c.initial, primary:c.primary, secondary:c.secondary });
-    setLoggedIn(true); setRole('cliente'); setPage('inicio');
-  }
-  function confirmNewPassword(newPass){
-    setContas(prev=>prev.map(a=>a.id===pendingAccount.id?{...a, senha:newPass, primeiroAcesso:false}:a));
-    setPendingAccount(null);
-    loginAsCliente();
-    showToast('Senha definida com sucesso!');
-  }
-  function logout(){
-    setLoggedIn(false);
-    setNotifOpen(false);
   }
 
   function addClienteNotif(text){ setClienteNotifs(prev=>[{id:uid('cn'), text, time:'agora mesmo', lido:false}, ...prev]); }
@@ -295,12 +349,15 @@ function App(){
     showToast(criados>0 ? `${criados} gasto(s) fixo(s) gerado(s) para este mês!` : 'Gastos fixos deste mês já estavam gerados.');
   }
 
+  if(!authChecked){
+    return <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', color:'#888'}}>Carregando...</div>;
+  }
   if(pendingAccount){
     return <FirstAccessScreen account={pendingAccount} onDone={confirmNewPassword}/>;
   }
   if(!loggedIn){
     const stats = { clientes: clientes.length, encerrados: tickets.filter(t=>t.status==='encerrado').length, sla:'calculado em tempo real' };
-    return <LoginScreen onSubmitLogin={attemptLogin} stats={stats} equipe={equipe}/>;
+    return <LoginScreen onSubmitLogin={attemptLogin} stats={stats}/>;
   }
 
   const meta = PAGE_META(clientName)[page] || { title:'', sub:'' };

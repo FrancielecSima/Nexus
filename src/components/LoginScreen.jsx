@@ -1,18 +1,20 @@
 /* ============================================================
    LOGIN & FIRST ACCESS
 ============================================================ */
-function LoginScreen({ onSubmitLogin, stats, equipe }){
-  const [roleChoice, setRoleChoice] = useState('empresa');
-  const [staffId, setStaffId] = useState(equipe[0]?.id || '');
+function LoginScreen({ onSubmitLogin, stats }){
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
-  const [error, setError] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  function submit(e){
+  async function submit(e){
     e.preventDefault();
-    if(!email || !senha){ setError(true); return; }
-    setError(false);
-    onSubmitLogin(roleChoice, staffId);
+    if(!email || !senha){ setError('Preencha e-mail e senha.'); return; }
+    setError('');
+    setLoading(true);
+    const result = await onSubmitLogin(email, senha);
+    setLoading(false);
+    if(result && result.error){ setError(result.error); }
   }
 
   return (
@@ -31,11 +33,7 @@ function LoginScreen({ onSubmitLogin, stats, equipe }){
           <h2>Bem-vindo de volta</h2>
           <p className="sub">Entre com suas credenciais para acessar o painel.</p>
 
-          <div className="role-toggle">
-            <button type="button" className={roleChoice==='empresa'?'active':''} onClick={()=>setRoleChoice('empresa')}>Sou da Equipe</button>
-            <button type="button" className={roleChoice==='cliente'?'active':''} onClick={()=>setRoleChoice('cliente')}>Sou Cliente</button>
-          </div>
-
+          {error && <div className="login-error" style={{display:'block'}}>{error}</div>}
 
           <form onSubmit={submit}>
             <div className="field">
@@ -46,9 +44,8 @@ function LoginScreen({ onSubmitLogin, stats, equipe }){
               <label>Senha</label>
               <input type="password" value={senha} onChange={e=>setSenha(e.target.value)} autoComplete="new-password" name="nexus-login-senha" />
             </div>
-            <button type="submit" className="btn-primary">Entrar</button>
+            <button type="submit" className="btn-primary" disabled={loading}>{loading ? 'Entrando...' : 'Entrar'}</button>
           </form>
-
 
           <p className="login-foot">NEXUS © 2026 - Desenvolvido por Growp Brasil</p>
         </div>
