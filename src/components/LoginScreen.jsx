@@ -40,11 +40,11 @@ function LoginScreen({ onSubmitLogin, stats, equipe }){
           <form onSubmit={submit}>
             <div className="field">
               <label>E-mail</label>
-              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} />
+              <input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="off" name="nexus-login-email" />
             </div>
             <div className="field">
               <label>Senha</label>
-              <input type="password" value={senha} onChange={e=>setSenha(e.target.value)} />
+              <input type="password" value={senha} onChange={e=>setSenha(e.target.value)} autoComplete="new-password" name="nexus-login-senha" />
             </div>
             <button type="submit" className="btn-primary">Entrar</button>
           </form>
