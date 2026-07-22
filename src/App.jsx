@@ -11,7 +11,7 @@ function App(){
   const [clientName,setClientName] = useState('');
   const [branding,setBranding] = useState({ name:'Souza Tecnologia', initial:'S', primary:'#FF6A2B', secondary:'#1E1F24' });
 
-  const [clientes,setClientes] = useState(initialClientes);
+  const [clientes,setClientes] = useState([]);
   const [servicos,setServicos] = useState(initialServicos);
   const [contas,setContas] = useState(initialContas);
   const [equipe] = useState(initialEquipe);
@@ -30,7 +30,7 @@ function App(){
   const [toastMsg,setToastMsg] = useState(null);
   const toastTimer = useRef(null);
 
-  const [personalizacaoSelectedId,setPersonalizacaoSelectedId] = useState(initialClientes[0].id);
+  const [personalizacaoSelectedId,setPersonalizacaoSelectedId] = useState(null);
   const [pendingAccount,setPendingAccount] = useState(null);
 
   // ---------- Autenticação real (Supabase Auth) ----------
@@ -110,6 +110,20 @@ function App(){
     setNotifOpen(false);
   }
 
+  // ---------- Clientes (dados reais do Supabase) ----------
+  useEffect(()=>{
+    if(!loggedIn || role!=='empresa') return;
+    loadClientes();
+  }, [loggedIn, role]);
+
+  async function loadClientes(){
+    const { data, error } = await supabaseClient.from('clientes').select('*').order('created_at', {ascending:true});
+    if(error){ showToast('Erro ao carregar clientes: ' + error.message); return; }
+    const lista = data.map(clienteFromRow);
+    setClientes(lista);
+    if(lista.length>0 && !personalizacaoSelectedId) setPersonalizacaoSelectedId(lista[0].id);
+  }
+
   // ---------- Persistência local (interina, até migrarmos cada tela para o Supabase) ----------
   // Isto ainda cobre só as LISTAS de dados (clientes, tickets, caixa...), que por enquanto
   // continuam vindo do seedData.js. O login acima já é 100% real via Supabase Auth.
@@ -121,7 +135,6 @@ function App(){
       const raw = localStorage.getItem('nexus_data_v1');
       if(raw){
         const saved = JSON.parse(raw);
-        if(saved.clientes) setClientes(saved.clientes);
         if(saved.servicos) setServicos(saved.servicos);
         if(saved.contas) setContas(saved.contas);
         if(saved.tickets) setTickets(saved.tickets);
@@ -137,10 +150,10 @@ function App(){
     if(!hydrated.current) return;
     try {
       localStorage.setItem('nexus_data_v1', JSON.stringify({
-        clientes, servicos, contas, tickets, caixa, orcamentos, gastos, auditLog
+        servicos, contas, tickets, caixa, orcamentos, gastos, auditLog
       }));
     } catch(e){ console.error('Falha ao salvar dados localmente:', e); }
-  }, [clientes, servicos, contas, tickets, caixa, orcamentos, gastos, auditLog]);
+  }, [servicos, contas, tickets, caixa, orcamentos, gastos, auditLog]);
 
   useEffect(()=>{
     function handler(e){ if(!e.target.closest('.bell-wrap')) setNotifOpen(false); }
@@ -227,25 +240,42 @@ function App(){
   }
 
   // ---------- Clientes ----------
-  function saveClient(data, editingId){
+  async function saveClient(data, editingId){
     if(editingId){
       const antes = clientes.find(c=>c.id===editingId);
-      setClientes(prev=>prev.map(c=>c.id===editingId?{...c, ...data}:c));
+      const { data: row, error } = await supabaseClient
+        .from('clientes').update(clienteToRow(data)).eq('id', editingId).select().single();
+      if(error){ showToast('Erro ao salvar cliente: ' + error.message); return; }
+      setClientes(prev=>prev.map(c=>c.id===editingId?clienteFromRow(row):c));
       logAudit('Editou cliente', `${data.nome} — valor mensal ${fmtBRL(antes?antes.valorMensal:0)} → ${fmtBRL(data.valorMensal)}`);
       showToast('Cliente atualizado com sucesso!');
     } else {
       const color = PALETTE[clientes.length % PALETTE.length];
-      setClientes(prev=>[...prev, { id:uid('cli'), ...data, empresa:data.nome, primary:color, secondary:'#1E1F24', initial:data.nome.charAt(0).toUpperCase() }]);
+      const payload = clienteToRow({ ...data, empresa:data.nome, primary:color, secondary:'#1E1F24', initial:data.nome.charAt(0).toUpperCase() });
+      const { data: row, error } = await supabaseClient.from('clientes').insert(payload).select().single();
+      if(error){ showToast('Erro ao cadastrar cliente: ' + error.message); return; }
+      setClientes(prev=>[...prev, clienteFromRow(row)]);
       logAudit('Cadastrou cliente', data.nome);
       showToast('Cliente cadastrado com sucesso!');
     }
   }
-  function deleteClient(id){
+  async function deleteClient(id){
     if(!window.confirm('Excluir este cliente? Essa ação não pode ser desfeita.')) return;
     const c = clientes.find(x=>x.id===id);
+    const { error } = await supabaseClient.from('clientes').delete().eq('id', id);
+    if(error){ showToast('Erro ao excluir cliente: ' + error.message); return; }
     setClientes(prev=>prev.filter(c=>c.id!==id));
     logAudit('Excluiu cliente', c?c.nome:id);
     showToast('Cliente excluído.');
+  }
+  async function savePersonalizacao(id, patch){
+    const { data: row, error } = await supabaseClient
+      .from('clientes').update(clienteToRow(patch)).eq('id', id).select().single();
+    if(error){ showToast('Erro ao salvar personalização: ' + error.message); return; }
+    const atualizado = clienteFromRow(row);
+    setClientes(prev=>prev.map(c=>c.id===id?atualizado:c));
+    if(atualizado.nome===clientName){ setBranding({ name:atualizado.empresa, initial:atualizado.initial, primary:atualizado.primary, secondary:atualizado.secondary }); }
+    showToast('Personalização salva — o portal de ' + atualizado.nome + ' foi atualizado');
   }
 
   // ---------- Caixa ----------
@@ -381,7 +411,7 @@ function App(){
             {role==='empresa' && page==='fin-chamados' && <PageFinChamados tickets={tickets} equipe={equipe} onOpenModal={setModalTicketId} onStatusChange={updateTicketStatus} onAssign={assignResponsavel}/>}
             {role==='empresa' && page==='fin-auditoria' && <PageAuditoria auditLog={auditLog}/>}
             {role==='empresa' && page==='clientes' && <PageDashboardClientes clientes={clientes} tickets={tickets} onPersonalizar={(id)=>{ setPersonalizacaoSelectedId(id); goPage('personalizacao'); }}/>}
-            {role==='empresa' && page==='personalizacao' && <PagePersonalizacao clientes={clientes} setClientes={setClientes} selectedId={personalizacaoSelectedId} setSelectedId={setPersonalizacaoSelectedId} clientName={clientName} setBranding={setBranding} showToast={showToast}/>}
+            {role==='empresa' && page==='personalizacao' && <PagePersonalizacao clientes={clientes} onSave={savePersonalizacao} selectedId={personalizacaoSelectedId} setSelectedId={setPersonalizacaoSelectedId} clientName={clientName} showToast={showToast}/>}
             {role==='empresa' && page==='cli-acessos' && <PageCliAcessos contas={contas} setContas={setContas} showToast={showToast}/>}
 
             {role==='cliente' && page==='inicio' && <PageInicio tickets={tickets} clientName={clientName} branding={branding} clienteNotifs={clienteNotifs} onGoNova={()=>setPage('nova')} onAvaliar={avaliarChamado}/>}

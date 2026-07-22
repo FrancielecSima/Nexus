@@ -1,6 +1,43 @@
 /* ============================================================
    HELPERS — funções puras usadas em toda a aplicação
 ============================================================ */
+// Converte uma linha da tabela `clientes` (Supabase, snake_case) para o
+// formato que as telas do app já esperam (camelCase, nomes antigos).
+function clienteFromRow(r){
+  return {
+    id: r.id,
+    authUserId: r.auth_user_id,
+    nome: r.nome,
+    empresa: r.empresa,
+    cnpj: r.cnpj,
+    email: r.email,
+    endereco: r.endereco,
+    servico: r.servico,
+    valorMensal: Number(r.valor_cobranca),
+    periodicidade: r.periodicidade,
+    primary: r.cor_primaria,
+    secondary: r.cor_secundaria,
+    initial: r.sigla,
+  };
+}
+// Converte os dados do formulário (camelCase) para as colunas reais da
+// tabela `clientes` no Supabase, prontas para insert/update.
+function clienteToRow(data){
+  const row = {};
+  if('nome' in data) row.nome = data.nome;
+  if('empresa' in data) row.empresa = data.empresa;
+  if('cnpj' in data) row.cnpj = data.cnpj;
+  if('email' in data) row.email = data.email;
+  if('endereco' in data) row.endereco = data.endereco;
+  if('servico' in data) row.servico = data.servico;
+  if('valorMensal' in data) row.valor_cobranca = data.valorMensal;
+  if('periodicidade' in data) row.periodicidade = data.periodicidade;
+  if('primary' in data) row.cor_primaria = data.primary;
+  if('secondary' in data) row.cor_secundaria = data.secondary;
+  if('initial' in data) row.sigla = data.initial;
+  return row;
+}
+
 let _uidCounter = 1000;
 function uid(prefix){ return prefix + '-' + (_uidCounter++); }
 

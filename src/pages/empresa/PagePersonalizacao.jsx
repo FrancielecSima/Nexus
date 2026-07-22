@@ -1,7 +1,7 @@
 /* ============================================================
    EMPRESA > DASHBOARD CLIENTES > PERSONALIZAÇÃO
 ============================================================ */
-function PagePersonalizacao({ clientes, setClientes, selectedId, setSelectedId, clientName, setBranding, showToast }){
+function PagePersonalizacao({ clientes, onSave, selectedId, setSelectedId, clientName, showToast }){
   const client = clientes.find(c=>c.id===selectedId) || clientes[0];
   const [name, setName] = useState(client ? client.empresa : '');
   const [primary, setPrimary] = useState(client ? client.primary : PALETTE[0]);
@@ -16,9 +16,7 @@ function PagePersonalizacao({ clientes, setClientes, selectedId, setSelectedId, 
   const initial = (name.trim().charAt(0)||'C').toUpperCase();
 
   function save(){
-    setClientes(prev=>prev.map(c=>c.id===client.id?{...c, empresa:name, primary, secondary, initial}:c));
-    if(client.nome===clientName){ setBranding({ name, initial, primary, secondary }); }
-    showToast('Personalização salva — o portal de ' + client.nome + ' foi atualizado');
+    onSave(client.id, { empresa:name, primary, secondary, initial });
   }
 
   return (
