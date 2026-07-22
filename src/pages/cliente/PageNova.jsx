@@ -6,12 +6,15 @@ function PageNova({ branding, onSubmit }){
   const [prioridade,setPrioridade]=useState('Média');
   const [categoria,setCategoria]=useState('Suporte técnico');
   const [descricao,setDescricao]=useState('');
+  const [loading,setLoading]=useState(false);
 
-  function submit(e){
+  async function submit(e){
     e.preventDefault();
     if(!assunto || !descricao) return;
-    onSubmit({ assunto, prioridade, categoria, descricao });
-    setAssunto(''); setDescricao('');
+    setLoading(true);
+    const ok = await onSubmit({ assunto, prioridade, categoria, descricao });
+    setLoading(false);
+    if(ok){ setAssunto(''); setDescricao(''); }
   }
 
   return (
@@ -40,7 +43,7 @@ function PageNova({ branding, onSubmit }){
           <label>Descrição do problema</label>
           <textarea className="text-input wide" value={descricao} onChange={e=>setDescricao(e.target.value)} placeholder="Conte com detalhes o que está acontecendo..." required></textarea>
         </div>
-        <button className="btn-mini solid" type="submit" style={{background:branding.primary}}>Enviar Solicitação</button>
+        <button className="btn-mini solid" type="submit" style={{background:branding.primary}} disabled={loading}>{loading ? 'Enviando...' : 'Enviar Solicitação'}</button>
       </form>
     </div>
   );

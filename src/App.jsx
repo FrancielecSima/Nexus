@@ -260,7 +260,7 @@ function App(){
     showToast('Chamado atribuído a ' + (nome?nome.nome:'—'));
   }
   async function submitNovaSolicitacao(data){
-    if(!currentClienteId){ showToast('Não foi possível identificar seu cadastro de cliente.'); return; }
+    if(!currentClienteId){ showToast('Não foi possível identificar seu cadastro de cliente.'); return false; }
     const payload = {
       cliente_id: currentClienteId,
       titulo: data.assunto,
@@ -270,11 +270,12 @@ function App(){
       descricao: data.descricao,
     };
     const { error } = await supabaseClient.from('tickets').insert(payload);
-    if(error){ showToast('Erro ao enviar solicitação: ' + error.message); return; }
+    if(error){ showToast('Erro ao enviar solicitação: ' + error.message); return false; }
     await loadTickets();
     addEmpresaNotif(`Novo chamado aberto por ${clientName} — "${data.assunto}"`);
     showToast('Solicitação enviada com sucesso!');
     setPage('chamados');
+    return true;
   }
   async function avaliarChamado(id, nota){
     const t = tickets.find(x=>x.id===id);
