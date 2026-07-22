@@ -85,7 +85,7 @@ function PageFinanceiro({ tickets, caixa, orcamentos, gastos, terceirizados, cli
         <table><thead><tr><th>Cliente</th><th>Chamado</th><th>Status</th><th>Aberto em</th></tr></thead>
           <tbody>
             {recentes.map(t=>(
-              <tr key={t.id}><td><b>{t.cliente}</b></td><td>{t.id} · {t.title}</td><td><span className={"badge "+STATUS_BADGE[t.status]}>{STATUS_LABELS[t.status]}</span></td><td>{fmtDataHora(t.criadoEm)}</td></tr>
+              <tr key={t.id}><td><b>{t.cliente}</b></td><td>#{t.numero} · {t.title}</td><td><span className={"badge "+STATUS_BADGE[t.status]}>{STATUS_LABELS[t.status]}</span></td><td>{fmtDataHora(t.criadoEm)}</td></tr>
             ))}
           </tbody>
         </table>

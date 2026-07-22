@@ -13,7 +13,7 @@ function TicketModal({ ticket, equipe, onClose, onSendInfo, onAssign }){
     <div className="modal-overlay open" onClick={(e)=>{ if(e.target===e.currentTarget) onClose(); }}>
       <div className="modal-box">
         <button className="modal-close" onClick={onClose}><IconClose/></button>
-        <h3>{ticket.id} · {ticket.title}</h3>
+        <h3>#{ticket.numero} · {ticket.title}</h3>
         <div className="m-sub">Solicitado por {ticket.cliente} · {fmtDataHora(ticket.criadoEm)}</div>
         <div className="kv-row"><span>Categoria</span><span>{ticket.categoria}</span></div>
         <div className="kv-row"><span>Prioridade</span><span>{ticket.priority}</span></div>

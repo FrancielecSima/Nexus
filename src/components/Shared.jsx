@@ -30,7 +30,7 @@ function TicketRow({ t, onAvaliar }){
     <div className="ticket-card" style={{flexDirection:'column', alignItems:'stretch'}}>
       <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', width:'100%'}}>
         <div>
-          <div className="t-title">{t.id} · {t.title}</div>
+          <div className="t-title">#{t.numero} · {t.title}</div>
           <div className="t-meta">{fmtDataHora(t.criadoEm)}</div>
           {!isEncerrado && <div className="t-meta" style={{marginTop:2}}>{STATUS_LABELS[t.status]}</div>}
         </div>

@@ -14,9 +14,10 @@ function App(){
   const [clientes,setClientes] = useState([]);
   const [servicos,setServicos] = useState(initialServicos);
   const [contas,setContas] = useState(initialContas);
-  const [equipe] = useState(initialEquipe);
+  const [equipe,setEquipe] = useState([]);
   const [currentStaffId,setCurrentStaffId] = useState(null);
-  const [tickets,setTickets] = useState(initialTickets);
+  const [currentClienteId,setCurrentClienteId] = useState(null);
+  const [tickets,setTickets] = useState([]);
   const [caixa,setCaixa] = useState(initialCaixa);
   const [orcamentos,setOrcamentos] = useState(initialOrcamentos);
   const [gastos,setGastos] = useState(initialGastos);
@@ -79,6 +80,7 @@ function App(){
         .from('clientes').select('*').eq('auth_user_id', session.user.id).single();
       if(cliente){
         setClientName(cliente.nome);
+        setCurrentClienteId(cliente.id);
         setBranding({ name: cliente.empresa, initial: cliente.sigla, primary: cliente.cor_primaria, secondary: cliente.cor_secundaria });
       }
       setRole('cliente');
@@ -110,11 +112,18 @@ function App(){
     setNotifOpen(false);
   }
 
-  // ---------- Clientes (dados reais do Supabase) ----------
+  // ---------- Clientes / Equipe / Chamados (dados reais do Supabase) ----------
   useEffect(()=>{
     if(!loggedIn || role!=='empresa') return;
     loadClientes();
+    loadEquipe();
+    loadTickets();
   }, [loggedIn, role]);
+
+  useEffect(()=>{
+    if(!loggedIn || role!=='cliente' || !currentClienteId) return;
+    loadTickets();
+  }, [loggedIn, role, currentClienteId]);
 
   async function loadClientes(){
     const { data, error } = await supabaseClient.from('clientes').select('*').order('created_at', {ascending:true});
@@ -122,6 +131,24 @@ function App(){
     const lista = data.map(clienteFromRow);
     setClientes(lista);
     if(lista.length>0 && !personalizacaoSelectedId) setPersonalizacaoSelectedId(lista[0].id);
+  }
+
+  async function loadEquipe(){
+    const { data, error } = await supabaseClient.from('equipe').select('*').eq('ativo', true).order('nome');
+    if(error){ showToast('Erro ao carregar equipe: ' + error.message); return; }
+    setEquipe(data.map(r=>({
+      id: r.id, nome: r.nome, cargo: r.cargo,
+      avatar: r.nome.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()
+    })));
+  }
+
+  async function loadTickets(){
+    const { data, error } = await supabaseClient
+      .from('tickets')
+      .select('*, clientes(nome), ticket_historico(id, texto, created_at)')
+      .order('criado_em', {ascending:false});
+    if(error){ showToast('Erro ao carregar chamados: ' + error.message); return; }
+    setTickets(data.map(ticketFromRow));
   }
 
   // ---------- Persistência local (interina, até migrarmos cada tela para o Supabase) ----------
@@ -137,7 +164,6 @@ function App(){
         const saved = JSON.parse(raw);
         if(saved.servicos) setServicos(saved.servicos);
         if(saved.contas) setContas(saved.contas);
-        if(saved.tickets) setTickets(saved.tickets);
         if(saved.caixa) setCaixa(saved.caixa);
         if(saved.orcamentos) setOrcamentos(saved.orcamentos);
         if(saved.gastos) setGastos(saved.gastos);
@@ -150,10 +176,10 @@ function App(){
     if(!hydrated.current) return;
     try {
       localStorage.setItem('nexus_data_v1', JSON.stringify({
-        servicos, contas, tickets, caixa, orcamentos, gastos, auditLog
+        servicos, contas, caixa, orcamentos, gastos, auditLog
       }));
     } catch(e){ console.error('Falha ao salvar dados localmente:', e); }
-  }, [servicos, contas, tickets, caixa, orcamentos, gastos, auditLog]);
+  }, [servicos, contas, caixa, orcamentos, gastos, auditLog]);
 
   useEffect(()=>{
     function handler(e){ if(!e.target.closest('.bell-wrap')) setNotifOpen(false); }
@@ -198,44 +224,64 @@ function App(){
   function addEmpresaNotif(text){ setEmpresaNotifs(prev=>[{id:uid('en'), text, time:'agora mesmo', lido:false}, ...prev]); }
 
   // ---------- Chamados ----------
-  function updateTicketStatus(id, status){
-    setTickets(prev=>prev.map(t=>{
-      if(t.id!==id) return t;
-      const patch = { status };
-      if(!t.primeiraRespostaEm) patch.primeiraRespostaEm = new Date().toISOString();
-      if(status==='encerrado' && !t.encerradoEm) patch.encerradoEm = new Date().toISOString();
-      if(status!=='encerrado') patch.encerradoEm = null;
-      return { ...t, ...patch };
-    }));
-    addClienteNotif(`Atualização no chamado ${id}: status alterado para "${STATUS_LABELS[status]}"`);
-    logAudit('Alterou status de chamado', `${id} → ${STATUS_LABELS[status]}`);
-    showToast('Status do chamado ' + id + ' atualizado');
+  async function updateTicketStatus(id, status){
+    const t = tickets.find(x=>x.id===id);
+    if(!t) return;
+    const patch = { status };
+    if(!t.primeiraRespostaEm) patch.primeira_resposta_em = new Date().toISOString();
+    if(status==='encerrado' && !t.encerradoEm) patch.encerrado_em = new Date().toISOString();
+    if(status!=='encerrado') patch.encerrado_em = null;
+    const { error } = await supabaseClient.from('tickets').update(patch).eq('id', id);
+    if(error){ showToast('Erro ao atualizar status: ' + error.message); return; }
+    await loadTickets();
+    addClienteNotif(`Atualização no chamado #${t.numero}: status alterado para "${STATUS_LABELS[status]}"`);
+    logAudit('Alterou status de chamado', `#${t.numero} → ${STATUS_LABELS[status]}`);
+    showToast('Status do chamado #' + t.numero + ' atualizado');
   }
-  function sendInfo(id, msg){
-    setTickets(prev=>prev.map(t=>t.id===id?{
-      ...t, status:'aguardando_retorno',
-      primeiraRespostaEm: t.primeiraRespostaEm || new Date().toISOString(),
-      history:[...t.history, {text:`Equipe solicitou: "${msg}"`, time:'agora mesmo'}]
-    }:t));
-    addClienteNotif(`O suporte pediu mais informações no chamado ${id}`);
+  async function sendInfo(id, msg){
+    const t = tickets.find(x=>x.id===id);
+    if(!t) return;
+    const { error: histErr } = await supabaseClient.from('ticket_historico').insert({ ticket_id: id, texto: `Equipe solicitou: "${msg}"` });
+    if(histErr){ showToast('Erro ao enviar solicitação: ' + histErr.message); return; }
+    const patch = { status:'aguardando_retorno' };
+    if(!t.primeiraRespostaEm) patch.primeira_resposta_em = new Date().toISOString();
+    const { error } = await supabaseClient.from('tickets').update(patch).eq('id', id);
+    if(error){ showToast('Erro ao atualizar chamado: ' + error.message); return; }
+    await loadTickets();
+    addClienteNotif(`O suporte pediu mais informações no chamado #${t.numero}`);
     showToast('Solicitação enviada ao cliente');
     setModalTicketId(null);
   }
-  function assignResponsavel(id, responsavelId){
-    setTickets(prev=>prev.map(t=>t.id===id?{...t, responsavelId}:t));
+  async function assignResponsavel(id, responsavelId){
+    const { error } = await supabaseClient.from('tickets').update({ responsavel_id: responsavelId || null }).eq('id', id);
+    if(error){ showToast('Erro ao atribuir responsável: ' + error.message); return; }
+    await loadTickets();
     const nome = equipe.find(e=>e.id===responsavelId);
     showToast('Chamado atribuído a ' + (nome?nome.nome:'—'));
   }
-  function submitNovaSolicitacao(data){
-    const id = '#' + (1053 + tickets.length + Math.floor(Math.random()*89));
-    setTickets(prev=>[{ id, cliente:clientName, title:data.assunto, status:'em_atendimento', priority:data.prioridade, categoria:data.categoria, descricao:data.descricao, history:[], responsavelId:null, criadoEm:new Date().toISOString(), primeiraRespostaEm:null, encerradoEm:null, avaliacao:null }, ...prev]);
+  async function submitNovaSolicitacao(data){
+    if(!currentClienteId){ showToast('Não foi possível identificar seu cadastro de cliente.'); return; }
+    const payload = {
+      cliente_id: currentClienteId,
+      titulo: data.assunto,
+      status: 'em_atendimento',
+      prioridade: data.prioridade,
+      categoria: data.categoria,
+      descricao: data.descricao,
+    };
+    const { error } = await supabaseClient.from('tickets').insert(payload);
+    if(error){ showToast('Erro ao enviar solicitação: ' + error.message); return; }
+    await loadTickets();
     addEmpresaNotif(`Novo chamado aberto por ${clientName} — "${data.assunto}"`);
     showToast('Solicitação enviada com sucesso!');
     setPage('chamados');
   }
-  function avaliarChamado(id, nota){
-    setTickets(prev=>prev.map(t=>t.id===id?{...t, avaliacao:nota}:t));
-    addEmpresaNotif(`${clientName} avaliou o chamado ${id} com nota ${nota}`);
+  async function avaliarChamado(id, nota){
+    const t = tickets.find(x=>x.id===id);
+    const { error } = await supabaseClient.from('tickets').update({ avaliacao: nota }).eq('id', id);
+    if(error){ showToast('Erro ao enviar avaliação: ' + error.message); return; }
+    await loadTickets();
+    addEmpresaNotif(`${clientName} avaliou o chamado #${t?t.numero:''} com nota ${nota}`);
     showToast('Obrigado pela avaliação!');
   }
 

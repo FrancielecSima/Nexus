@@ -1,6 +1,32 @@
 /* ============================================================
    HELPERS — funções puras usadas em toda a aplicação
 ============================================================ */
+// Converte uma linha de `tickets` do Supabase (com clientes e ticket_historico
+// embutidos via join) para o formato que as telas do app já esperam.
+function ticketFromRow(row){
+  const historico = (row.ticket_historico || [])
+    .slice()
+    .sort((a,b)=> new Date(a.created_at) - new Date(b.created_at))
+    .map(h=>({ text: h.texto, time: fmtDataHora(h.created_at) }));
+  return {
+    id: row.id,
+    numero: row.numero,
+    clienteId: row.cliente_id,
+    cliente: row.clientes ? row.clientes.nome : '',
+    title: row.titulo,
+    status: row.status,
+    priority: row.prioridade,
+    categoria: row.categoria,
+    descricao: row.descricao,
+    history: historico,
+    responsavelId: row.responsavel_id,
+    criadoEm: row.criado_em,
+    primeiraRespostaEm: row.primeira_resposta_em,
+    encerradoEm: row.encerrado_em,
+    avaliacao: row.avaliacao,
+  };
+}
+
 // Converte uma linha da tabela `clientes` (Supabase, snake_case) para o
 // formato que as telas do app já esperam (camelCase, nomes antigos).
 function clienteFromRow(r){
