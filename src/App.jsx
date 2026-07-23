@@ -7,6 +7,11 @@ function App(){
   const [authUser,setAuthUser] = useState(null);
   const [role,setRole] = useState('empresa');
   const [page,setPage] = useState('financeiro');
+  // Lembra a última tela vista nesta aba — se o navegador descartar a aba em
+  // segundo plano e recarregar ao voltar, a pessoa não cai mais na tela inicial.
+  useEffect(()=>{
+    if(page) sessionStorage.setItem('nexus_last_page', page);
+  }, [page]);
   const [expandedGroups,setExpandedGroups] = useState({financeiro:true, clientes:true});
   const [clientName,setClientName] = useState('');
   const [branding,setBranding] = useState({ name:'Souza Tecnologia', initial:'S', primary:'#FF6A2B', secondary:'#1E1F24' });
@@ -81,7 +86,7 @@ function App(){
       setRole('empresa');
       setCurrentStaffId(session.user.id);
       setLoggedIn(true);
-      setPage('financeiro');
+      setPage(sessionStorage.getItem('nexus_last_page') || 'financeiro');
     } else {
       const { data: cliente } = await supabaseClient
         .from('clientes').select('*').eq('auth_user_id', session.user.id).single();
@@ -93,7 +98,7 @@ function App(){
       }
       setRole('cliente');
       setLoggedIn(true);
-      setPage('inicio');
+      setPage(sessionStorage.getItem('nexus_last_page') || 'inicio');
     }
   }
 
@@ -120,6 +125,7 @@ function App(){
     setLoggedIn(false);
     setAuthUser(null);
     setNotifOpen(false);
+    sessionStorage.removeItem('nexus_last_page');
   }
 
   // ---------- Clientes / Equipe / Chamados (dados reais do Supabase) ----------
