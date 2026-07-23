@@ -42,8 +42,8 @@ function App(){
   // Restaura a sessão ao carregar a página e escuta mudanças de login/logout
   // (inclusive se o usuário sair em outra aba, ou o token expirar).
   useEffect(()=>{
-    supabaseClient.auth.getSession().then(({ data })=>{
-      handleAuthChange(data.session);
+    supabaseClient.auth.getSession().then(async ({ data })=>{
+      await handleAuthChange(data.session);
       setAuthChecked(true);
     });
     const { data: listener } = supabaseClient.auth.onAuthStateChange((event, session)=>{
