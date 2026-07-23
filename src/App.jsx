@@ -13,7 +13,7 @@ function App(){
 
   const [clientes,setClientes] = useState([]);
   const [servicos,setServicos] = useState([]);
-  const [contas,setContas] = useState(initialContas);
+  const [clienteEmail,setClienteEmail] = useState('');
   const [equipe,setEquipe] = useState([]);
   const [currentStaffId,setCurrentStaffId] = useState(null);
   const [currentClienteId,setCurrentClienteId] = useState(null);
@@ -80,6 +80,7 @@ function App(){
       if(cliente){
         setClientName(cliente.nome);
         setCurrentClienteId(cliente.id);
+        setClienteEmail(cliente.email);
         setBranding({ name: cliente.empresa, initial: cliente.sigla, primary: cliente.cor_primaria, secondary: cliente.cor_secundaria });
       }
       setRole('cliente');
@@ -206,30 +207,8 @@ function App(){
     setNotifs(data.map(notificacaoFromRow));
   }
 
-  // ---------- Persistência local (interina, até migrarmos cada tela para o Supabase) ----------
-  // Isto ainda cobre só as LISTAS de dados (clientes, tickets, caixa...), que por enquanto
-  // continuam vindo do seedData.js. O login acima já é 100% real via Supabase Auth.
-  // Guarda no navegador para sobreviver a um F5, mas NÃO é um banco de verdade — é o próximo
-  // pedaço a ser migrado.
-  const hydrated = useRef(false);
-  useEffect(()=>{
-    try {
-      const raw = localStorage.getItem('nexus_data_v1');
-      if(raw){
-        const saved = JSON.parse(raw);
-        if(saved.contas) setContas(saved.contas);
-      }
-    } catch(e){ console.error('Falha ao carregar dados salvos localmente:', e); }
-    hydrated.current = true;
-  },[]);
-  useEffect(()=>{
-    if(!hydrated.current) return;
-    try {
-      localStorage.setItem('nexus_data_v1', JSON.stringify({
-        contas
-      }));
-    } catch(e){ console.error('Falha ao salvar dados localmente:', e); }
-  }, [contas]);
+  // ---------- (bloco de persistência local removido — não há mais dados fictícios
+  // sobrando no navegador; tudo relevante já vem do Supabase) ----------
 
   useEffect(()=>{
     function handler(e){ if(!e.target.closest('.bell-wrap')) setNotifOpen(false); }
@@ -386,6 +365,35 @@ function App(){
     setClientes(prev=>prev.map(c=>c.id===id?atualizado:c));
     if(atualizado.nome===clientName){ setBranding({ name:atualizado.empresa, initial:atualizado.initial, primary:atualizado.primary, secondary:atualizado.secondary }); }
     showToast('Personalização salva — o portal de ' + atualizado.nome + ' foi atualizado');
+  }
+
+  // ---------- Acessos de Clientes (via Edge Function — precisa da service_role no servidor) ----------
+  async function criarAcessoCliente(clienteId, nome, email, senha){
+    const { data, error } = await supabaseClient.functions.invoke('manage-cliente-access', {
+      body: { action:'create', clienteId, nome, email, senha }
+    });
+    if(error || (data && data.error)){ showToast('Erro ao criar acesso: ' + (data?.error || error.message)); return; }
+    await loadClientes();
+    logAudit('Criou acesso de cliente', `${nome} — ${email}`);
+    showToast('Acesso criado! O cliente vai definir uma nova senha no primeiro login.');
+  }
+  async function resetarSenhaCliente(authUserId, nome, senha){
+    const { data, error } = await supabaseClient.functions.invoke('manage-cliente-access', {
+      body: { action:'reset_password', authUserId, senha }
+    });
+    if(error || (data && data.error)){ showToast('Erro ao redefinir senha: ' + (data?.error || error.message)); return; }
+    logAudit('Redefiniu senha de cliente', nome);
+    showToast('Senha redefinida! O cliente vai definir uma nova senha no próximo login.');
+  }
+  async function revogarAcessoCliente(authUserId, clienteId, nome){
+    if(!window.confirm('Remover o acesso deste cliente? Ele não vai mais conseguir fazer login.')) return;
+    const { data, error } = await supabaseClient.functions.invoke('manage-cliente-access', {
+      body: { action:'revoke', authUserId, clienteId }
+    });
+    if(error || (data && data.error)){ showToast('Erro ao remover acesso: ' + (data?.error || error.message)); return; }
+    await loadClientes();
+    logAudit('Removeu acesso de cliente', nome);
+    showToast('Acesso removido.');
   }
 
   // ---------- Caixa ----------
@@ -568,12 +576,12 @@ function App(){
             {role==='empresa' && page==='fin-auditoria' && <PageAuditoria auditLog={auditLog}/>}
             {role==='empresa' && page==='clientes' && <PageDashboardClientes clientes={clientes} tickets={tickets} onPersonalizar={(id)=>{ setPersonalizacaoSelectedId(id); goPage('personalizacao'); }}/>}
             {role==='empresa' && page==='personalizacao' && <PagePersonalizacao clientes={clientes} onSave={savePersonalizacao} selectedId={personalizacaoSelectedId} setSelectedId={setPersonalizacaoSelectedId} clientName={clientName} showToast={showToast}/>}
-            {role==='empresa' && page==='cli-acessos' && <PageCliAcessos contas={contas} setContas={setContas} showToast={showToast}/>}
+            {role==='empresa' && page==='cli-acessos' && <PageCliAcessos clientes={clientes} onCreate={criarAcessoCliente} onReset={resetarSenhaCliente} onRevoke={revogarAcessoCliente}/>}
 
             {role==='cliente' && page==='inicio' && <PageInicio tickets={tickets} clientName={clientName} branding={branding} clienteNotifs={notifs} onGoNova={()=>setPage('nova')} onAvaliar={avaliarChamado}/>}
             {role==='cliente' && page==='chamados' && <PageChamados tickets={tickets} clientName={clientName} onAvaliar={avaliarChamado}/>}
             {role==='cliente' && page==='nova' && <PageNova branding={branding} onSubmit={submitNovaSolicitacao}/>}
-            {role==='cliente' && page==='perfil' && <PagePerfil clientName={clientName} branding={branding} contas={contas}/>}
+            {role==='cliente' && page==='perfil' && <PagePerfil clientName={clientName} branding={branding} clienteEmail={clienteEmail}/>}
           </div>
         </main>
       </div>

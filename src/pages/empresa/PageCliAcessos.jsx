@@ -1,83 +1,88 @@
 /* ============================================================
    EMPRESA > DASHBOARD CLIENTES > ACESSOS DE CLIENTES
+   Cria login real (Supabase Auth) para um cliente já cadastrado,
+   via Edge Function (precisa da service_role, que não pode rodar
+   no navegador). Veja a Edge Function "manage-cliente-access".
 ============================================================ */
-function PageCliAcessos({ contas, setContas, showToast }){
-  const [editing, setEditing] = useState(null);
-  const editingObj = editing ? contas.find(a=>a.id===editing) : null;
-  const [nome,setNome]=useState(''); const [empresa,setEmpresa]=useState('');
-  const [email,setEmail]=useState(''); const [senha,setSenha]=useState('');
-  const [forcarNovoAcesso,setForcar]=useState(false);
+function PageCliAcessos({ clientes, onCreate, onReset, onRevoke }){
+  const [selectedId, setSelectedId] = useState('');
+  const [email, setEmail] = useState('');
+  const [senha, setSenha] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const semAcesso = clientes.filter(c=>!c.authUserId);
+  const comAcesso = clientes.filter(c=>c.authUserId);
+  const clienteSelecionado = clientes.find(c=>c.id===selectedId);
 
   useEffect(()=>{
-    if(editingObj){ setNome(editingObj.nome); setEmpresa(editingObj.empresa); setEmail(editingObj.email); setSenha(''); setForcar(false); }
-    else { setNome(''); setEmpresa(''); setEmail(''); setSenha(''); setForcar(false); }
-  }, [editing]);
+    if(clienteSelecionado){ setEmail(clienteSelecionado.email); } else { setEmail(''); }
+    setSenha('');
+  }, [selectedId]);
 
-  function submit(e){
+  async function submit(e){
     e.preventDefault();
-    if(!nome||!empresa||!email) return;
-    if(editing){
-      setContas(prev=>prev.map(a=>a.id===editing?{...a, nome, empresa, email, senha: senha?senha:a.senha, primeiroAcesso: forcarNovoAcesso ? true : a.primeiroAcesso }:a));
-      showToast('Acesso atualizado com sucesso!');
-    } else {
-      if(!senha) return;
-      setContas(prev=>[...prev, { id:uid('acc'), nome, empresa, email, senha, primeiroAcesso:true }]);
-      showToast('Acesso criado! O cliente vai definir a senha no primeiro login.');
-    }
-    setEditing(null);
+    if(!selectedId || !email || !senha) return;
+    setLoading(true);
+    await onCreate(selectedId, clienteSelecionado.nome, email, senha);
+    setLoading(false);
+    setSelectedId(''); setEmail(''); setSenha('');
   }
-  function remove(id){
-    if(!window.confirm('Excluir este acesso?')) return;
-    setContas(prev=>prev.filter(a=>a.id!==id));
-    if(editing===id) setEditing(null);
-    showToast('Acesso excluído.');
+
+  function reset(c){
+    const nova = window.prompt('Nova senha temporária para ' + c.nome + ':');
+    if(nova && nova.length>=6) onReset(c.authUserId, c.nome, nova);
+    else if(nova) window.alert('A senha precisa ter pelo menos 6 caracteres.');
   }
 
   return (
     <div className="grid" style={{gridTemplateColumns:'1fr 1.4fr', gap:18, alignItems:'start'}}>
       <div className="card">
-        <div className="card-head"><div className="bar"></div><h3>{editing?'Editar Acesso':'Novo Acesso de Cliente'}</h3></div>
-        <form onSubmit={submit}>
-          <div className="field-l" style={{marginBottom:14}}><label>Nome</label><input className="text-input" value={nome} onChange={e=>setNome(e.target.value)} required/></div>
-          <div className="field-l" style={{marginBottom:14}}><label>Empresa</label><input className="text-input" value={empresa} onChange={e=>setEmpresa(e.target.value)} required/></div>
-          <div className="field-l" style={{marginBottom:14}}><label>E-mail</label><input type="email" className="text-input" value={email} onChange={e=>setEmail(e.target.value)} required/></div>
-          <div className="field-l" style={{marginBottom:14}}>
-            <label>{editing? 'Nova Senha (opcional)':'Senha Temporária'}</label>
-            <input type="password" className="text-input" value={senha} onChange={e=>setSenha(e.target.value)} placeholder={editing?'Deixe em branco para manter':''} required={!editing}/>
-          </div>
-          {editing && (
-            <label style={{display:'flex', alignItems:'center', gap:8, fontSize:12.5, color:'var(--text-2)', marginBottom:20, fontWeight:600}}>
-              <input type="checkbox" checked={forcarNovoAcesso} onChange={e=>setForcar(e.target.checked)} />
-              Solicitar definição de nova senha no próximo login
-            </label>
-          )}
-          <div className="form-actions">
-            <button className="btn-mini solid" type="submit">{editing?'Salvar Alterações':'Criar Acesso'}</button>
-            {editing && <button className="btn-mini ghost" type="button" onClick={()=>setEditing(null)}>Cancelar</button>}
-          </div>
-        </form>
+        <div className="card-head"><div className="bar"></div><h3>Criar Acesso de Cliente</h3></div>
+        {semAcesso.length===0 ? (
+          <p className="empty-note-sm">Todos os clientes cadastrados já têm acesso ao portal.</p>
+        ) : (
+          <form onSubmit={submit}>
+            <div className="field-l" style={{marginBottom:14}}>
+              <label>Cliente</label>
+              <select className="select-input" value={selectedId} onChange={e=>setSelectedId(e.target.value)} required>
+                <option value="">Selecione um cliente...</option>
+                {semAcesso.map(c=><option key={c.id} value={c.id}>{c.nome} — {c.empresa}</option>)}
+              </select>
+            </div>
+            <div className="field-l" style={{marginBottom:14}}>
+              <label>E-mail de Login</label>
+              <input type="email" className="text-input" value={email} onChange={e=>setEmail(e.target.value)} required/>
+            </div>
+            <div className="field-l" style={{marginBottom:20}}>
+              <label>Senha Temporária</label>
+              <input type="password" className="text-input" value={senha} onChange={e=>setSenha(e.target.value)} placeholder="mínimo 6 caracteres" required minLength={6}/>
+            </div>
+            <div className="form-actions">
+              <button className="btn-mini solid" type="submit" disabled={loading}>{loading?'Criando...':'Criar Acesso'}</button>
+            </div>
+          </form>
+        )}
         <p style={{fontSize:11.5,color:'var(--gray)',marginTop:14}}>No primeiro login, o cliente será solicitado a definir uma nova senha antes de entrar no portal.</p>
       </div>
       <div className="card">
-        <div className="card-head"><div className="bar" style={{background:'var(--rosa)'}}></div><h3>Acessos Criados ({contas.length})</h3></div>
-        <table><thead><tr><th>Nome</th><th>Empresa</th><th>E-mail</th><th>Status</th><th></th></tr></thead>
+        <div className="card-head"><div className="bar" style={{background:'var(--rosa)'}}></div><h3>Acessos Criados ({comAcesso.length})</h3></div>
+        <table><thead><tr><th>Nome</th><th>Empresa</th><th>E-mail</th><th></th></tr></thead>
           <tbody>
-            {contas.map(a=>(
-              <tr key={a.id}>
-                <td><b>{a.nome}</b></td><td>{a.empresa}</td><td>{a.email}</td>
-                <td><span className={"badge "+(a.primeiroAcesso?'b-laranja':'b-green')}>{a.primeiroAcesso?'Primeiro acesso pendente':'Ativo'}</span></td>
+            {comAcesso.map(c=>(
+              <tr key={c.id}>
+                <td><b>{c.nome}</b></td><td>{c.empresa}</td><td>{c.email}</td>
                 <td>
                   <div className="row-actions">
-                    <button className="icon-btn-sm ghost" onClick={()=>setEditing(a.id)}>Editar</button>
-                    <button className="icon-btn-sm danger" onClick={()=>remove(a.id)}>Excluir</button>
+                    <button className="icon-btn-sm ghost" onClick={()=>reset(c)}>Redefinir Senha</button>
+                    <button className="icon-btn-sm danger" onClick={()=>onRevoke(c.authUserId, c.id, c.nome)}>Remover Acesso</button>
                   </div>
                 </td>
               </tr>
             ))}
+            {comAcesso.length===0 && <tr><td colSpan="4" className="empty-note-sm">Nenhum cliente com acesso ainda.</td></tr>}
           </tbody>
         </table>
       </div>
     </div>
   );
 }
-
