@@ -1,6 +1,14 @@
 /* ============================================================
    HELPERS — funções puras usadas em toda a aplicação
 ============================================================ */
+function notificacaoFromRow(row){
+  return { id: row.id, text: row.texto, time: fmtDataHora(row.created_at), lido: row.lida };
+}
+function auditFromRow(row, equipeById){
+  const staff = equipeById ? equipeById[row.usuario_id] : null;
+  return { id: row.id, quando: row.criado_em, usuario: staff ? staff.nome : 'Equipe', acao: row.acao, detalhe: row.detalhe };
+}
+
 function servicoFromRow(r){
   return { id: r.id, nome: r.nome, valor: Number(r.valor), comissaoPercent: Number(r.comissao_percent) };
 }

@@ -22,9 +22,8 @@ function App(){
   const [orcamentos,setOrcamentos] = useState([]);
   const [gastos,setGastos] = useState([]);
   const [terceirizados] = useState(initialTerceirizados);
-  const [empresaNotifs,setEmpresaNotifs] = useState(initialEmpresaNotifs);
-  const [clienteNotifs,setClienteNotifs] = useState(initialClienteNotifs);
-  const [auditLog,setAuditLog] = useState(initialAuditLog);
+  const [notifs,setNotifs] = useState([]);
+  const [auditLog,setAuditLog] = useState([]);
 
   const [notifOpen,setNotifOpen] = useState(false);
   const [modalTicketId,setModalTicketId] = useState(null);
@@ -116,13 +115,18 @@ function App(){
   useEffect(()=>{
     if(!loggedIn || role!=='empresa') return;
     loadClientes();
-    loadEquipe();
     loadTickets();
     loadCaixa();
     loadServicos();
     loadOrcamentos();
     loadGastos();
+    loadEquipe().then(eq=>loadAuditLog(eq));
   }, [loggedIn, role]);
+
+  useEffect(()=>{
+    if(!loggedIn || !authUser) return;
+    loadNotifs();
+  }, [loggedIn, authUser && authUser.id]);
 
   useEffect(()=>{
     if(!loggedIn || role!=='cliente' || !currentClienteId) return;
@@ -139,11 +143,13 @@ function App(){
 
   async function loadEquipe(){
     const { data, error } = await supabaseClient.from('equipe').select('*').eq('ativo', true).order('nome');
-    if(error){ showToast('Erro ao carregar equipe: ' + error.message); return; }
-    setEquipe(data.map(r=>({
+    if(error){ showToast('Erro ao carregar equipe: ' + error.message); return []; }
+    const lista = data.map(r=>({
       id: r.id, nome: r.nome, cargo: r.cargo,
       avatar: r.nome.split(' ').filter(Boolean).slice(0,2).map(w=>w[0]).join('').toUpperCase()
-    })));
+    }));
+    setEquipe(lista);
+    return lista;
   }
 
   async function loadTickets(){
@@ -185,6 +191,21 @@ function App(){
     setGastos(data.map(gastoFromRow));
   }
 
+  async function loadAuditLog(equipeList){
+    const lista = equipeList || equipe;
+    const equipeById = {};
+    lista.forEach(e=>{ equipeById[e.id] = e; });
+    const { data, error } = await supabaseClient.from('audit_log').select('*').order('criado_em', {ascending:false}).limit(500);
+    if(error){ showToast('Erro ao carregar auditoria: ' + error.message); return; }
+    setAuditLog(data.map(r=>auditFromRow(r, equipeById)));
+  }
+
+  async function loadNotifs(){
+    const { data, error } = await supabaseClient.from('notificacoes').select('*').eq('user_id', authUser.id).order('created_at', {ascending:false}).limit(50);
+    if(error){ showToast('Erro ao carregar notificações: ' + error.message); return; }
+    setNotifs(data.map(notificacaoFromRow));
+  }
+
   // ---------- Persistência local (interina, até migrarmos cada tela para o Supabase) ----------
   // Isto ainda cobre só as LISTAS de dados (clientes, tickets, caixa...), que por enquanto
   // continuam vindo do seedData.js. O login acima já é 100% real via Supabase Auth.
@@ -197,7 +218,6 @@ function App(){
       if(raw){
         const saved = JSON.parse(raw);
         if(saved.contas) setContas(saved.contas);
-        if(saved.auditLog) setAuditLog(saved.auditLog);
       }
     } catch(e){ console.error('Falha ao carregar dados salvos localmente:', e); }
     hydrated.current = true;
@@ -206,10 +226,10 @@ function App(){
     if(!hydrated.current) return;
     try {
       localStorage.setItem('nexus_data_v1', JSON.stringify({
-        contas, auditLog
+        contas
       }));
     } catch(e){ console.error('Falha ao salvar dados localmente:', e); }
-  }, [contas, auditLog]);
+  }, [contas]);
 
   useEffect(()=>{
     function handler(e){ if(!e.target.closest('.bell-wrap')) setNotifOpen(false); }
@@ -227,8 +247,10 @@ function App(){
     const s = equipe.find(e=>e.id===currentStaffId);
     return s ? s.nome : 'Equipe';
   }
-  function logAudit(acao, detalhe){
-    setAuditLog(prev=>[{ id:uid('log'), quando:new Date().toISOString(), usuario:currentStaffName(), acao, detalhe }, ...prev].slice(0,500));
+  async function logAudit(acao, detalhe){
+    if(!authUser) return;
+    const { error } = await supabaseClient.from('audit_log').insert({ usuario_id: authUser.id, acao, detalhe });
+    if(!error) loadAuditLog();
   }
 
   function toggleGroup(id){
@@ -241,17 +263,26 @@ function App(){
     if(id==='personalizacao'||id==='cli-acessos') setExpandedGroups(prev=>({...prev, clientes:true}));
   }
 
-  function handleBellClick(){
+  async function handleBellClick(){
     const opening = !notifOpen;
     setNotifOpen(opening);
-    if(opening){
-      if(role==='empresa') setEmpresaNotifs(prev=>prev.map(n=>({...n,lido:true})));
-      else setClienteNotifs(prev=>prev.map(n=>({...n,lido:true})));
+    if(opening && authUser){
+      const temNaoLida = notifs.some(n=>!n.lido);
+      if(temNaoLida){
+        setNotifs(prev=>prev.map(n=>({...n,lido:true})));
+        await supabaseClient.from('notificacoes').update({ lida:true }).eq('user_id', authUser.id).eq('lida', false);
+      }
     }
   }
 
-  function addClienteNotif(text){ setClienteNotifs(prev=>[{id:uid('cn'), text, time:'agora mesmo', lido:false}, ...prev]); }
-  function addEmpresaNotif(text){ setEmpresaNotifs(prev=>[{id:uid('en'), text, time:'agora mesmo', lido:false}, ...prev]); }
+  async function notifyCliente(clienteAuthUserId, text){
+    if(!clienteAuthUserId) return;
+    await supabaseClient.from('notificacoes').insert({ user_id: clienteAuthUserId, texto: text });
+  }
+  async function notifyEmpresa(text){
+    if(equipe.length===0) return;
+    await supabaseClient.from('notificacoes').insert(equipe.map(e=>({ user_id: e.id, texto: text })));
+  }
 
   // ---------- Chamados ----------
   async function updateTicketStatus(id, status){
@@ -264,7 +295,8 @@ function App(){
     const { error } = await supabaseClient.from('tickets').update(patch).eq('id', id);
     if(error){ showToast('Erro ao atualizar status: ' + error.message); return; }
     await loadTickets();
-    addClienteNotif(`Atualização no chamado #${t.numero}: status alterado para "${STATUS_LABELS[status]}"`);
+    const cli = clientes.find(c=>c.id===t.clienteId);
+    notifyCliente(cli?.authUserId, `Atualização no chamado #${t.numero}: status alterado para "${STATUS_LABELS[status]}"`);
     logAudit('Alterou status de chamado', `#${t.numero} → ${STATUS_LABELS[status]}`);
     showToast('Status do chamado #' + t.numero + ' atualizado');
   }
@@ -278,7 +310,8 @@ function App(){
     const { error } = await supabaseClient.from('tickets').update(patch).eq('id', id);
     if(error){ showToast('Erro ao atualizar chamado: ' + error.message); return; }
     await loadTickets();
-    addClienteNotif(`O suporte pediu mais informações no chamado #${t.numero}`);
+    const cli = clientes.find(c=>c.id===t.clienteId);
+    notifyCliente(cli?.authUserId, `O suporte pediu mais informações no chamado #${t.numero}`);
     showToast('Solicitação enviada ao cliente');
     setModalTicketId(null);
   }
@@ -302,7 +335,7 @@ function App(){
     const { error } = await supabaseClient.from('tickets').insert(payload);
     if(error){ showToast('Erro ao enviar solicitação: ' + error.message); return false; }
     await loadTickets();
-    addEmpresaNotif(`Novo chamado aberto por ${clientName} — "${data.assunto}"`);
+    notifyEmpresa(`Novo chamado aberto por ${clientName} — "${data.assunto}"`);
     showToast('Solicitação enviada com sucesso!');
     setPage('chamados');
     return true;
@@ -312,7 +345,7 @@ function App(){
     const { error } = await supabaseClient.from('tickets').update({ avaliacao: nota }).eq('id', id);
     if(error){ showToast('Erro ao enviar avaliação: ' + error.message); return; }
     await loadTickets();
-    addEmpresaNotif(`${clientName} avaliou o chamado #${t?t.numero:''} com nota ${nota}`);
+    notifyEmpresa(`${clientName} avaliou o chamado #${t?t.numero:''} com nota ${nota}`);
     showToast('Obrigado pela avaliação!');
   }
 
@@ -515,7 +548,6 @@ function App(){
   }
 
   const meta = PAGE_META(clientName)[page] || { title:'', sub:'' };
-  const notifs = role==='empresa' ? empresaNotifs : clienteNotifs;
   const avatarInitials = role==='empresa' ? (equipe.find(e=>e.id===currentStaffId)||{}).avatar || 'EQ' : branding.initial;
   const modalTicket = modalTicketId ? tickets.find(t=>t.id===modalTicketId) : null;
 
@@ -538,7 +570,7 @@ function App(){
             {role==='empresa' && page==='personalizacao' && <PagePersonalizacao clientes={clientes} onSave={savePersonalizacao} selectedId={personalizacaoSelectedId} setSelectedId={setPersonalizacaoSelectedId} clientName={clientName} showToast={showToast}/>}
             {role==='empresa' && page==='cli-acessos' && <PageCliAcessos contas={contas} setContas={setContas} showToast={showToast}/>}
 
-            {role==='cliente' && page==='inicio' && <PageInicio tickets={tickets} clientName={clientName} branding={branding} clienteNotifs={clienteNotifs} onGoNova={()=>setPage('nova')} onAvaliar={avaliarChamado}/>}
+            {role==='cliente' && page==='inicio' && <PageInicio tickets={tickets} clientName={clientName} branding={branding} clienteNotifs={notifs} onGoNova={()=>setPage('nova')} onAvaliar={avaliarChamado}/>}
             {role==='cliente' && page==='chamados' && <PageChamados tickets={tickets} clientName={clientName} onAvaliar={avaliarChamado}/>}
             {role==='cliente' && page==='nova' && <PageNova branding={branding} onSubmit={submitNovaSolicitacao}/>}
             {role==='cliente' && page==='perfil' && <PagePerfil clientName={clientName} branding={branding} contas={contas}/>}
