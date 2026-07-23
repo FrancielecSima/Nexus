@@ -41,16 +41,24 @@ function App(){
       handleAuthChange(data.session);
       setAuthChecked(true);
     });
-    const { data: listener } = supabaseClient.auth.onAuthStateChange((_event, session)=>{
-      handleAuthChange(session);
+    const { data: listener } = supabaseClient.auth.onAuthStateChange((event, session)=>{
+      handleAuthChange(session, event);
     });
     return ()=>{ listener.subscription.unsubscribe(); };
   },[]);
 
-  async function handleAuthChange(session){
+  async function handleAuthChange(session, event){
     if(!session){
       setAuthUser(null);
       setLoggedIn(false);
+      return;
+    }
+    // O Supabase renova o token automaticamente ao voltar pra aba, o que dispara
+    // este mesmo listener — sem essa checagem, isso resetava a pessoa pra tela
+    // inicial toda vez que ela trocava de aba e voltava. Numa renovação de token,
+    // só atualizamos a sessão e não mexemos em página/estado nenhum.
+    if(event==='TOKEN_REFRESHED'){
+      setAuthUser(session.user);
       return;
     }
     setAuthUser(session.user);
