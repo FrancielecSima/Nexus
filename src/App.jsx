@@ -98,7 +98,8 @@ function App(){
   async function confirmNewPassword(newPass){
     const { error } = await supabaseClient.auth.updateUser({ password: newPass });
     if(error){ return { error: traduzErroSenha(error.message) }; }
-    await supabaseClient.from('profiles').update({ must_change_password: false }).eq('id', pendingAccount.id);
+    const { error: profileUpdateErr } = await supabaseClient.from('profiles').update({ must_change_password: false }).eq('id', pendingAccount.id);
+    if(profileUpdateErr){ return { error: 'Senha alterada, mas houve um erro ao liberar o acesso: ' + profileUpdateErr.message }; }
     const { data } = await supabaseClient.auth.getSession();
     setPendingAccount(null);
     await handleAuthChange(data.session);

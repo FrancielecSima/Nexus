@@ -214,6 +214,8 @@ $$;
 
 create policy "ver proprio perfil ou equipe ve tudo" on profiles
   for select using (id = auth.uid() or is_empresa());
+create policy "atualiza proprio perfil" on profiles
+  for update using (id = auth.uid()) with check (id = auth.uid());
 
 create policy "empresa gerencia clientes" on clientes
   for all using (is_empresa()) with check (is_empresa());
