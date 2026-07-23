@@ -163,6 +163,17 @@ function isoDateTime(offsetDays, offsetHours, offsetMinutes){
   d.setMinutes(d.getMinutes()+(offsetMinutes||0));
   return d.toISOString();
 }
+// Traduz as mensagens de erro mais comuns do Supabase Auth ao trocar senha,
+// pra a pessoa entender o motivo real em vez de um erro técnico em inglês.
+function traduzErroSenha(msg){
+  const m = (msg || '').toLowerCase();
+  if(m.includes('different from the old password')) return 'A nova senha precisa ser diferente da senha atual.';
+  if(m.includes('at least') && m.includes('character')) return 'A senha não atende aos requisitos mínimos definidos no Supabase (verifique Authentication → Policies).';
+  if(m.includes('should contain')) return 'A senha precisa conter letras maiúsculas, minúsculas, números e símbolo, conforme exigido no seu projeto Supabase.';
+  if(m.includes('weak') || m.includes('pwned') || m.includes('leaked')) return 'Essa senha é considerada fraca ou já vazada publicamente — escolha outra.';
+  return 'Erro ao definir senha: ' + msg;
+}
+
 function fmtBRL(n){
   return 'R$ ' + (Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:2, maximumFractionDigits:2});
 }

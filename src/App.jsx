@@ -97,12 +97,13 @@ function App(){
 
   async function confirmNewPassword(newPass){
     const { error } = await supabaseClient.auth.updateUser({ password: newPass });
-    if(error){ showToast('Erro ao definir senha: ' + error.message); return; }
+    if(error){ return { error: traduzErroSenha(error.message) }; }
     await supabaseClient.from('profiles').update({ must_change_password: false }).eq('id', pendingAccount.id);
     const { data } = await supabaseClient.auth.getSession();
     setPendingAccount(null);
     await handleAuthChange(data.session);
     showToast('Senha definida com sucesso!');
+    return {};
   }
 
   async function logout(){
