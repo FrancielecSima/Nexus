@@ -1,7 +1,7 @@
 /* ============================================================
    EMPRESA > FINANCEIRO > SERVIÇOS (editar/excluir)
 ============================================================ */
-function PageFinServicos({ servicos, setServicos, showToast }){
+function PageFinServicos({ servicos, onSave, onDelete, showToast }){
   const [editing, setEditing] = useState(null);
   const editingObj = editing ? servicos.find(s=>s.id===editing) : null;
   const [nome,setNome] = useState('');
@@ -16,20 +16,12 @@ function PageFinServicos({ servicos, setServicos, showToast }){
   function submit(e){
     e.preventDefault();
     if(!nome || valor==='' || comissao==='') return;
-    if(editing){
-      setServicos(prev=>prev.map(s=>s.id===editing?{...s, nome, valor:parseFloat(valor), comissaoPercent:parseFloat(comissao)}:s));
-      showToast('Serviço atualizado com sucesso!');
-    } else {
-      setServicos(prev=>[...prev, { id:uid('srv'), nome, valor:parseFloat(valor), comissaoPercent:parseFloat(comissao) }]);
-      showToast('Serviço cadastrado com sucesso!');
-    }
+    onSave({ nome, valor:parseFloat(valor), comissaoPercent:parseFloat(comissao) }, editing);
     setEditing(null);
   }
   function remove(id){
-    if(!window.confirm('Excluir este serviço?')) return;
-    setServicos(prev=>prev.filter(s=>s.id!==id));
+    onDelete(id);
     if(editing===id) setEditing(null);
-    showToast('Serviço excluído.');
   }
 
   return (

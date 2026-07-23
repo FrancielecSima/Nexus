@@ -12,15 +12,15 @@ function App(){
   const [branding,setBranding] = useState({ name:'Souza Tecnologia', initial:'S', primary:'#FF6A2B', secondary:'#1E1F24' });
 
   const [clientes,setClientes] = useState([]);
-  const [servicos,setServicos] = useState(initialServicos);
+  const [servicos,setServicos] = useState([]);
   const [contas,setContas] = useState(initialContas);
   const [equipe,setEquipe] = useState([]);
   const [currentStaffId,setCurrentStaffId] = useState(null);
   const [currentClienteId,setCurrentClienteId] = useState(null);
   const [tickets,setTickets] = useState([]);
   const [caixa,setCaixa] = useState([]);
-  const [orcamentos,setOrcamentos] = useState(initialOrcamentos);
-  const [gastos,setGastos] = useState(initialGastos);
+  const [orcamentos,setOrcamentos] = useState([]);
+  const [gastos,setGastos] = useState([]);
   const [terceirizados] = useState(initialTerceirizados);
   const [empresaNotifs,setEmpresaNotifs] = useState(initialEmpresaNotifs);
   const [clienteNotifs,setClienteNotifs] = useState(initialClienteNotifs);
@@ -119,6 +119,9 @@ function App(){
     loadEquipe();
     loadTickets();
     loadCaixa();
+    loadServicos();
+    loadOrcamentos();
+    loadGastos();
   }, [loggedIn, role]);
 
   useEffect(()=>{
@@ -161,6 +164,27 @@ function App(){
     setCaixa(data.map(caixaFromRow));
   }
 
+  async function loadServicos(){
+    const { data, error } = await supabaseClient.from('servicos').select('*').order('nome');
+    if(error){ showToast('Erro ao carregar serviços: ' + error.message); return; }
+    setServicos(data.map(servicoFromRow));
+  }
+
+  async function loadOrcamentos(){
+    const { data, error } = await supabaseClient
+      .from('orcamentos')
+      .select('*, clientes(nome)')
+      .order('created_at', {ascending:false});
+    if(error){ showToast('Erro ao carregar orçamentos: ' + error.message); return; }
+    setOrcamentos(data.map(orcamentoFromRow));
+  }
+
+  async function loadGastos(){
+    const { data, error } = await supabaseClient.from('gastos').select('*').order('vencimento', {ascending:false});
+    if(error){ showToast('Erro ao carregar gastos: ' + error.message); return; }
+    setGastos(data.map(gastoFromRow));
+  }
+
   // ---------- Persistência local (interina, até migrarmos cada tela para o Supabase) ----------
   // Isto ainda cobre só as LISTAS de dados (clientes, tickets, caixa...), que por enquanto
   // continuam vindo do seedData.js. O login acima já é 100% real via Supabase Auth.
@@ -172,10 +196,7 @@ function App(){
       const raw = localStorage.getItem('nexus_data_v1');
       if(raw){
         const saved = JSON.parse(raw);
-        if(saved.servicos) setServicos(saved.servicos);
         if(saved.contas) setContas(saved.contas);
-        if(saved.orcamentos) setOrcamentos(saved.orcamentos);
-        if(saved.gastos) setGastos(saved.gastos);
         if(saved.auditLog) setAuditLog(saved.auditLog);
       }
     } catch(e){ console.error('Falha ao carregar dados salvos localmente:', e); }
@@ -185,10 +206,10 @@ function App(){
     if(!hydrated.current) return;
     try {
       localStorage.setItem('nexus_data_v1', JSON.stringify({
-        servicos, contas, orcamentos, gastos, auditLog
+        contas, auditLog
       }));
     } catch(e){ console.error('Falha ao salvar dados localmente:', e); }
-  }, [servicos, contas, orcamentos, gastos, auditLog]);
+  }, [contas, auditLog]);
 
   useEffect(()=>{
     function handler(e){ if(!e.target.closest('.bell-wrap')) setNotifOpen(false); }
@@ -398,53 +419,88 @@ function App(){
   }
 
   // ---------- Orçamentos ----------
-  function addOrcamento(data){
-    setOrcamentos(prev=>[{ id:uid('orc'), ...data, status:'Em análise' }, ...prev]);
+  async function addOrcamento(data){
+    const cli = clientes.find(c=>c.nome===data.cliente);
+    if(!cli){ showToast('Cliente não encontrado.'); return; }
+    const srv = servicos.find(s=>s.nome===data.item);
+    const payload = orcamentoToRow({ clienteId: cli.id, servicoId: srv?srv.id:null, item:data.item, valor:data.valor, comissao:data.comissao, status:'Em análise' });
+    const { error } = await supabaseClient.from('orcamentos').insert(payload);
+    if(error){ showToast('Erro ao cadastrar orçamento: ' + error.message); return; }
+    await loadOrcamentos();
     showToast('Orçamento cadastrado!');
   }
-  function updateOrcamentoStatus(id, status){
+  async function updateOrcamentoStatus(id, status){
+    const { error } = await supabaseClient.from('orcamentos').update({ status }).eq('id', id);
+    if(error){ showToast('Erro ao atualizar orçamento: ' + error.message); return; }
     setOrcamentos(prev=>prev.map(o=>o.id===id?{...o,status}:o));
     showToast('Andamento atualizado para "' + status + '"');
   }
 
   // ---------- Gastos ----------
-  function saveGasto(data, editingId){
+  async function saveGasto(data, editingId){
     if(editingId){
-      setGastos(prev=>prev.map(g=>g.id===editingId?{...g, ...data}:g));
+      const { error } = await supabaseClient.from('gastos').update(gastoToRow(data)).eq('id', editingId);
+      if(error){ showToast('Erro ao salvar gasto: ' + error.message); return; }
+      await loadGastos();
       logAudit('Editou gasto', data.desc);
       showToast('Gasto atualizado!');
     } else {
-      setGastos(prev=>[...prev, { id:uid('gs'), ...data }]);
+      const { error } = await supabaseClient.from('gastos').insert(gastoToRow(data));
+      if(error){ showToast('Erro ao cadastrar gasto: ' + error.message); return; }
+      await loadGastos();
       logAudit('Cadastrou gasto', data.desc);
       showToast('Gasto cadastrado!');
     }
   }
-  function deleteGasto(id){
+  async function deleteGasto(id){
     if(!window.confirm('Excluir este gasto?')) return;
     const g = gastos.find(x=>x.id===id);
-    setGastos(prev=>prev.filter(g=>g.id!==id));
+    const { error } = await supabaseClient.from('gastos').delete().eq('id', id);
+    if(error){ showToast('Erro ao excluir gasto: ' + error.message); return; }
+    setGastos(prev=>prev.filter(x=>x.id!==id));
     logAudit('Excluiu gasto', g?g.desc:id);
     showToast('Gasto excluído.');
   }
-  function gerarGastosRecorrentes(){
+  async function gerarGastosRecorrentes(){
     const hoje = new Date();
     const mesAtual = hoje.toISOString().slice(0,7);
-    let criados = 0;
-    setGastos(prev=>{
-      const fixos = prev.filter(g=>g.recorrente);
-      const novos = [...prev];
-      fixos.forEach(g=>{
-        const jaExiste = novos.some(x=>x.desc===g.desc && x.vencimento.slice(0,7)===mesAtual);
-        if(!jaExiste){
-          const d = new Date(hoje.getFullYear(), hoje.getMonth(), new Date(g.vencimento+'T00:00:00').getDate());
-          novos.push({ id:uid('gs'), desc:g.desc, valor:g.valor, vencimento:d.toISOString().slice(0,10), categoria:g.categoria, recorrente:true });
-          criados++;
-        }
-      });
-      return novos;
+    const fixos = gastos.filter(g=>g.recorrente);
+    const novos = [];
+    fixos.forEach(g=>{
+      const jaExiste = gastos.some(x=>x.desc===g.desc && x.vencimento.slice(0,7)===mesAtual);
+      if(!jaExiste){
+        const d = new Date(hoje.getFullYear(), hoje.getMonth(), new Date(g.vencimento+'T00:00:00').getDate());
+        novos.push(gastoToRow({ desc:g.desc, valor:g.valor, vencimento:d.toISOString().slice(0,10), categoria:g.categoria, recorrente:true }));
+      }
     });
-    logAudit('Gerou gastos recorrentes do mês', `${criados} gasto(s) criado(s)`);
-    showToast(criados>0 ? `${criados} gasto(s) fixo(s) gerado(s) para este mês!` : 'Gastos fixos deste mês já estavam gerados.');
+    if(novos.length===0){ showToast('Gastos fixos deste mês já estavam gerados.'); return; }
+    const { error } = await supabaseClient.from('gastos').insert(novos);
+    if(error){ showToast('Erro ao gerar gastos recorrentes: ' + error.message); return; }
+    await loadGastos();
+    logAudit('Gerou gastos recorrentes do mês', `${novos.length} gasto(s) criado(s)`);
+    showToast(`${novos.length} gasto(s) fixo(s) gerado(s) para este mês!`);
+  }
+
+  // ---------- Serviços ----------
+  async function saveServico(data, editingId){
+    if(editingId){
+      const { error } = await supabaseClient.from('servicos').update(servicoToRow(data)).eq('id', editingId);
+      if(error){ showToast('Erro ao salvar serviço: ' + error.message); return; }
+      await loadServicos();
+      showToast('Serviço atualizado com sucesso!');
+    } else {
+      const { error } = await supabaseClient.from('servicos').insert(servicoToRow(data));
+      if(error){ showToast('Erro ao cadastrar serviço: ' + error.message); return; }
+      await loadServicos();
+      showToast('Serviço cadastrado com sucesso!');
+    }
+  }
+  async function deleteServico(id){
+    if(!window.confirm('Excluir este serviço?')) return;
+    const { error } = await supabaseClient.from('servicos').delete().eq('id', id);
+    if(error){ showToast('Erro ao excluir serviço: ' + error.message); return; }
+    setServicos(prev=>prev.filter(x=>x.id!==id));
+    showToast('Serviço excluído.');
   }
 
   if(!authChecked){
@@ -474,7 +530,7 @@ function App(){
             {role==='empresa' && page==='fin-clientes' && <PageFinClientes clientes={clientes} onSave={saveClient} onDelete={deleteClient}/>}
             {role==='empresa' && page==='fin-caixa' && <PageFinCaixa caixa={caixa} clientes={clientes} onSave={saveCaixa} onDelete={deleteCaixa} onMarcarPago={marcarPago} onGerarCobrancas={gerarCobrancasFuturas}/>}
             {role==='empresa' && page==='fin-orcamentos' && <PageFinOrcamentos orcamentos={orcamentos} clientes={clientes} servicos={servicos} onAdd={addOrcamento} onStatusChange={updateOrcamentoStatus} goPage={goPage}/>}
-            {role==='empresa' && page==='fin-servicos' && <PageFinServicos servicos={servicos} setServicos={setServicos} showToast={showToast}/>}
+            {role==='empresa' && page==='fin-servicos' && <PageFinServicos servicos={servicos} onSave={saveServico} onDelete={deleteServico} showToast={showToast}/>}
             {role==='empresa' && page==='fin-gastos' && <PageGastos gastos={gastos} onSave={saveGasto} onDelete={deleteGasto} onGerarRecorrentes={gerarGastosRecorrentes}/>}
             {role==='empresa' && page==='fin-chamados' && <PageFinChamados tickets={tickets} equipe={equipe} onOpenModal={setModalTicketId} onStatusChange={updateTicketStatus} onAssign={assignResponsavel}/>}
             {role==='empresa' && page==='fin-auditoria' && <PageAuditoria auditLog={auditLog}/>}

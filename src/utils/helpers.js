@@ -1,6 +1,51 @@
 /* ============================================================
    HELPERS — funções puras usadas em toda a aplicação
 ============================================================ */
+function servicoFromRow(r){
+  return { id: r.id, nome: r.nome, valor: Number(r.valor), comissaoPercent: Number(r.comissao_percent) };
+}
+function servicoToRow(data){
+  const row = {};
+  if('nome' in data) row.nome = data.nome;
+  if('valor' in data) row.valor = data.valor;
+  if('comissaoPercent' in data) row.comissao_percent = data.comissaoPercent;
+  return row;
+}
+function gastoFromRow(r){
+  return { id: r.id, desc: r.descricao, valor: Number(r.valor), vencimento: r.vencimento, categoria: r.categoria, recorrente: r.recorrente };
+}
+function gastoToRow(data){
+  const row = {};
+  if('desc' in data) row.descricao = data.desc;
+  if('valor' in data) row.valor = data.valor;
+  if('vencimento' in data) row.vencimento = data.vencimento;
+  if('categoria' in data) row.categoria = data.categoria;
+  if('recorrente' in data) row.recorrente = data.recorrente;
+  return row;
+}
+function orcamentoFromRow(row){
+  return {
+    id: row.id,
+    clienteId: row.cliente_id,
+    cliente: row.clientes ? row.clientes.nome : '',
+    servicoId: row.servico_id,
+    item: row.item,
+    valor: Number(row.valor),
+    comissao: Number(row.comissao),
+    status: row.status,
+  };
+}
+function orcamentoToRow(data){
+  const row = {};
+  if('clienteId' in data) row.cliente_id = data.clienteId;
+  if('servicoId' in data) row.servico_id = data.servicoId;
+  if('item' in data) row.item = data.item;
+  if('valor' in data) row.valor = data.valor;
+  if('comissao' in data) row.comissao = data.comissao;
+  if('status' in data) row.status = data.status;
+  return row;
+}
+
 // Converte uma linha de `caixa_lancamentos` do Supabase (com clientes
 // embutido via join) para o formato que as telas do app já esperam.
 function caixaFromRow(row){
