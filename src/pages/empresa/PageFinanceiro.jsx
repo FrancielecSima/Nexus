@@ -4,7 +4,17 @@
    timestamps reais, filtro de período no gráfico (últimos 6 meses /
    ano / intervalo personalizado) e exportação em CSV.
 ============================================================ */
-function PageFinanceiro({ tickets, caixa, orcamentos, gastos, terceirizados, clientes, equipe }){
+function PageFinanceiro({ tickets, caixa, orcamentos, gastos, terceirizados, onSaveTerceirizado, onDeleteTerceirizado, clientes, equipe }){
+  const [novoParceiro,setNovoParceiro] = useState('');
+  const [novoServico,setNovoServico] = useState('');
+  const [novoCusto,setNovoCusto] = useState('');
+
+  function submitTerceirizado(e){
+    e.preventDefault();
+    if(!novoParceiro || !novoServico || novoCusto==='') return;
+    onSaveTerceirizado({ parceiro:novoParceiro, servico:novoServico, custo:parseFloat(novoCusto) });
+    setNovoParceiro(''); setNovoServico(''); setNovoCusto('');
+  }
   const emAtendimento = tickets.filter(t=>t.status==='em_atendimento').length;
   const aguardando = tickets.filter(t=>t.status==='aguardando_retorno').length;
   const encerrados = tickets.filter(t=>t.status==='encerrado').length;
@@ -153,9 +163,23 @@ function PageFinanceiro({ tickets, caixa, orcamentos, gastos, terceirizados, cli
         </div>
         <div className="card">
           <div className="card-head"><div className="bar" style={{background:'var(--carvao-3)'}}></div><h3>Serviços Terceirizados</h3></div>
-          <table><thead><tr><th>Parceiro</th><th>Serviço</th><th>Custo</th></tr></thead>
-            <tbody>{terceirizados.map(t=>(<tr key={t.id}><td><b>{t.parceiro}</b></td><td>{t.servico}</td><td>{fmtBRL(t.custo)}</td></tr>))}</tbody>
+          <table><thead><tr><th>Parceiro</th><th>Serviço</th><th>Custo</th><th></th></tr></thead>
+            <tbody>
+              {terceirizados.map(t=>(
+                <tr key={t.id}>
+                  <td><b>{t.parceiro}</b></td><td>{t.servico}</td><td>{fmtBRL(t.custo)}</td>
+                  <td><button className="icon-btn-sm danger" onClick={()=>onDeleteTerceirizado(t.id)}>Excluir</button></td>
+                </tr>
+              ))}
+              {terceirizados.length===0 && <tr><td colSpan="4" className="empty-note-sm">Nenhum terceirizado cadastrado ainda.</td></tr>}
+            </tbody>
           </table>
+          <form onSubmit={submitTerceirizado} style={{display:'flex', gap:8, marginTop:12, flexWrap:'wrap'}}>
+            <input className="text-input" style={{flex:'1 1 120px'}} placeholder="Parceiro" value={novoParceiro} onChange={e=>setNovoParceiro(e.target.value)}/>
+            <input className="text-input" style={{flex:'1 1 120px'}} placeholder="Serviço" value={novoServico} onChange={e=>setNovoServico(e.target.value)}/>
+            <input className="text-input" type="number" step="0.01" style={{width:110}} placeholder="Custo" value={novoCusto} onChange={e=>setNovoCusto(e.target.value)}/>
+            <button className="btn-mini solid" type="submit">Adicionar</button>
+          </form>
         </div>
       </div>
     </React.Fragment>

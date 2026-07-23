@@ -1,6 +1,17 @@
 /* ============================================================
    HELPERS — funções puras usadas em toda a aplicação
 ============================================================ */
+function terceirizadoFromRow(r){
+  return { id: r.id, parceiro: r.parceiro, servico: r.servico, custo: Number(r.custo) };
+}
+function terceirizadoToRow(data){
+  const row = {};
+  if('parceiro' in data) row.parceiro = data.parceiro;
+  if('servico' in data) row.servico = data.servico;
+  if('custo' in data) row.custo = data.custo;
+  return row;
+}
+
 function notificacaoFromRow(row){
   return { id: row.id, text: row.texto, time: fmtDataHora(row.created_at), lido: row.lida };
 }
@@ -147,21 +158,11 @@ function clienteToRow(data){
   return row;
 }
 
-let _uidCounter = 1000;
-function uid(prefix){ return prefix + '-' + (_uidCounter++); }
 
 function isoDate(offsetDays){
   const d = new Date();
   d.setDate(d.getDate()+offsetDays);
   return d.toISOString().slice(0,10);
-}
-// Timestamp completo (data + hora), usado nos chamados para SLA real.
-function isoDateTime(offsetDays, offsetHours, offsetMinutes){
-  const d = new Date();
-  d.setDate(d.getDate()+(offsetDays||0));
-  d.setHours(d.getHours()+(offsetHours||0));
-  d.setMinutes(d.getMinutes()+(offsetMinutes||0));
-  return d.toISOString();
 }
 // Traduz as mensagens de erro mais comuns do Supabase Auth ao trocar senha,
 // pra a pessoa entender o motivo real em vez de um erro técnico em inglês.
@@ -272,39 +273,6 @@ function gradientFromSegments(segments){
   let acc = 0;
   const parts = segments.map(s=>{ const start=acc; acc+=s.pct; return `${s.color} ${start}% ${acc}%`; });
   return `conic-gradient(${parts.join(', ')})`;
-}
-
-// Gera lançamentos de caixa retroativos (demonstração) para os últimos ~14 meses,
-// já marcados como pagos, respeitando a periodicidade de cada cliente — assim o
-// gráfico "por Ano" já nasce com dado real pra comparar.
-function gerarHistoricoCaixaDemo(){
-  const entries = [];
-  const clientesDemo = [
-    { nome:'Ana Souza', valor:600, periodicidade:'mensal' },
-    { nome:'Bruno Lima', valor:450, periodicidade:'mensal' },
-    { nome:'Carla Dias', valor:2700, periodicidade:'trimestral' },
-    { nome:'Diego Ramos', valor:4200, periodicidade:'anual' },
-  ];
-  const passoMeses = { mensal:1, trimestral:3, anual:12 };
-  const now = new Date();
-  clientesDemo.forEach(c=>{
-    const passo = passoMeses[c.periodicidade];
-    for(let i=passo; i<=14; i+=passo){
-      const d = new Date(now.getFullYear(), now.getMonth()-i, Math.min(10, 28));
-      const venc = d.toISOString().slice(0,10);
-      const pago = new Date(d); pago.setDate(pago.getDate()+2);
-      entries.push({
-        id: uid('cx'),
-        cliente: c.nome,
-        valor: c.valor,
-        vencimento: venc,
-        status: 'pago',
-        dataPagamento: pago.toISOString().slice(0,10),
-        anexos: { boleto:null, nota:null },
-      });
-    }
-  });
-  return entries;
 }
 
 // Exporta uma lista de objetos como CSV e dispara o download no navegador.

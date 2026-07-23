@@ -21,7 +21,7 @@ function App(){
   const [caixa,setCaixa] = useState([]);
   const [orcamentos,setOrcamentos] = useState([]);
   const [gastos,setGastos] = useState([]);
-  const [terceirizados] = useState(initialTerceirizados);
+  const [terceirizados,setTerceirizados] = useState([]);
   const [notifs,setNotifs] = useState([]);
   const [auditLog,setAuditLog] = useState([]);
 
@@ -123,6 +123,7 @@ function App(){
     loadServicos();
     loadOrcamentos();
     loadGastos();
+    loadTerceirizados();
     loadEquipe().then(eq=>loadAuditLog(eq));
   }, [loggedIn, role]);
 
@@ -192,6 +193,12 @@ function App(){
     const { data, error } = await supabaseClient.from('gastos').select('*').order('vencimento', {ascending:false});
     if(error){ showToast('Erro ao carregar gastos: ' + error.message); return; }
     setGastos(data.map(gastoFromRow));
+  }
+
+  async function loadTerceirizados(){
+    const { data, error } = await supabaseClient.from('terceirizados').select('*').order('parceiro');
+    if(error){ showToast('Erro ao carregar terceirizados: ' + error.message); return; }
+    setTerceirizados(data.map(terceirizadoFromRow));
   }
 
   async function loadAuditLog(equipeList){
@@ -543,6 +550,24 @@ function App(){
     showToast('Serviço excluído.');
   }
 
+  // ---------- Terceirizados ----------
+  async function saveTerceirizado(data){
+    const { error } = await supabaseClient.from('terceirizados').insert(terceirizadoToRow(data));
+    if(error){ showToast('Erro ao cadastrar terceirizado: ' + error.message); return; }
+    await loadTerceirizados();
+    logAudit('Cadastrou terceirizado', `${data.parceiro} — ${data.servico}`);
+    showToast('Terceirizado cadastrado!');
+  }
+  async function deleteTerceirizado(id){
+    if(!window.confirm('Excluir este terceirizado?')) return;
+    const t = terceirizados.find(x=>x.id===id);
+    const { error } = await supabaseClient.from('terceirizados').delete().eq('id', id);
+    if(error){ showToast('Erro ao excluir terceirizado: ' + error.message); return; }
+    setTerceirizados(prev=>prev.filter(x=>x.id!==id));
+    logAudit('Excluiu terceirizado', t?t.parceiro:id);
+    showToast('Terceirizado excluído.');
+  }
+
   if(!authChecked){
     return <div style={{display:'flex', alignItems:'center', justifyContent:'center', height:'100vh', color:'#888'}}>Carregando...</div>;
   }
@@ -565,7 +590,7 @@ function App(){
         <main className="main">
           <Topbar title={meta.title} sub={meta.sub} notifs={notifs} notifOpen={notifOpen} onBellClick={handleBellClick} role={role} branding={branding} avatarInitials={avatarInitials}/>
           <div id="page-content">
-            {role==='empresa' && page==='financeiro' && <PageFinanceiro tickets={tickets} caixa={caixa} orcamentos={orcamentos} gastos={gastos} terceirizados={terceirizados} clientes={clientes} equipe={equipe}/>}
+            {role==='empresa' && page==='financeiro' && <PageFinanceiro tickets={tickets} caixa={caixa} orcamentos={orcamentos} gastos={gastos} terceirizados={terceirizados} onSaveTerceirizado={saveTerceirizado} onDeleteTerceirizado={deleteTerceirizado} clientes={clientes} equipe={equipe}/>}
             {role==='empresa' && page==='fin-clientes' && <PageFinClientes clientes={clientes} onSave={saveClient} onDelete={deleteClient}/>}
             {role==='empresa' && page==='fin-caixa' && <PageFinCaixa caixa={caixa} clientes={clientes} onSave={saveCaixa} onDelete={deleteCaixa} onMarcarPago={marcarPago} onGerarCobrancas={gerarCobrancasFuturas}/>}
             {role==='empresa' && page==='fin-orcamentos' && <PageFinOrcamentos orcamentos={orcamentos} clientes={clientes} servicos={servicos} onAdd={addOrcamento} onStatusChange={updateOrcamentoStatus} goPage={goPage}/>}
