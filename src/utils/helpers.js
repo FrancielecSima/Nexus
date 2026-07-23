@@ -1,6 +1,36 @@
 /* ============================================================
    HELPERS — funções puras usadas em toda a aplicação
 ============================================================ */
+// Converte uma linha de `caixa_lancamentos` do Supabase (com clientes
+// embutido via join) para o formato que as telas do app já esperam.
+function caixaFromRow(row){
+  return {
+    id: row.id,
+    clienteId: row.cliente_id,
+    cliente: row.clientes ? row.clientes.nome : '',
+    valor: Number(row.valor),
+    vencimento: row.vencimento,
+    status: row.status,
+    dataPagamento: row.data_pagamento,
+    anexos: { boleto: row.anexo_boleto_url, nota: row.anexo_nota_url },
+  };
+}
+// Converte os dados do formulário (já com clienteId resolvido) para as
+// colunas reais da tabela `caixa_lancamentos`, prontas para insert/update.
+function caixaToRow(data){
+  const row = {};
+  if('clienteId' in data) row.cliente_id = data.clienteId;
+  if('valor' in data) row.valor = data.valor;
+  if('vencimento' in data) row.vencimento = data.vencimento;
+  if('status' in data) row.status = data.status;
+  if('dataPagamento' in data) row.data_pagamento = data.dataPagamento;
+  if('anexos' in data){
+    row.anexo_boleto_url = data.anexos ? data.anexos.boleto : null;
+    row.anexo_nota_url = data.anexos ? data.anexos.nota : null;
+  }
+  return row;
+}
+
 // Converte uma linha de `tickets` do Supabase (com clientes e ticket_historico
 // embutidos via join) para o formato que as telas do app já esperam.
 function ticketFromRow(row){

@@ -18,7 +18,7 @@ function App(){
   const [currentStaffId,setCurrentStaffId] = useState(null);
   const [currentClienteId,setCurrentClienteId] = useState(null);
   const [tickets,setTickets] = useState([]);
-  const [caixa,setCaixa] = useState(initialCaixa);
+  const [caixa,setCaixa] = useState([]);
   const [orcamentos,setOrcamentos] = useState(initialOrcamentos);
   const [gastos,setGastos] = useState(initialGastos);
   const [terceirizados] = useState(initialTerceirizados);
@@ -118,6 +118,7 @@ function App(){
     loadClientes();
     loadEquipe();
     loadTickets();
+    loadCaixa();
   }, [loggedIn, role]);
 
   useEffect(()=>{
@@ -151,6 +152,15 @@ function App(){
     setTickets(data.map(ticketFromRow));
   }
 
+  async function loadCaixa(){
+    const { data, error } = await supabaseClient
+      .from('caixa_lancamentos')
+      .select('*, clientes(nome)')
+      .order('vencimento', {ascending:false});
+    if(error){ showToast('Erro ao carregar caixa: ' + error.message); return; }
+    setCaixa(data.map(caixaFromRow));
+  }
+
   // ---------- Persistência local (interina, até migrarmos cada tela para o Supabase) ----------
   // Isto ainda cobre só as LISTAS de dados (clientes, tickets, caixa...), que por enquanto
   // continuam vindo do seedData.js. O login acima já é 100% real via Supabase Auth.
@@ -164,7 +174,6 @@ function App(){
         const saved = JSON.parse(raw);
         if(saved.servicos) setServicos(saved.servicos);
         if(saved.contas) setContas(saved.contas);
-        if(saved.caixa) setCaixa(saved.caixa);
         if(saved.orcamentos) setOrcamentos(saved.orcamentos);
         if(saved.gastos) setGastos(saved.gastos);
         if(saved.auditLog) setAuditLog(saved.auditLog);
@@ -176,10 +185,10 @@ function App(){
     if(!hydrated.current) return;
     try {
       localStorage.setItem('nexus_data_v1', JSON.stringify({
-        servicos, contas, caixa, orcamentos, gastos, auditLog
+        servicos, contas, orcamentos, gastos, auditLog
       }));
     } catch(e){ console.error('Falha ao salvar dados localmente:', e); }
-  }, [servicos, contas, caixa, orcamentos, gastos, auditLog]);
+  }, [servicos, contas, orcamentos, gastos, auditLog]);
 
   useEffect(()=>{
     function handler(e){ if(!e.target.closest('.bell-wrap')) setNotifOpen(false); }
@@ -326,54 +335,66 @@ function App(){
   }
 
   // ---------- Caixa ----------
-  function saveCaixa(data, editingId){
+  async function saveCaixa(data, editingId){
+    const cli = clientes.find(c=>c.nome===data.cliente);
+    if(!cli){ showToast('Cliente não encontrado.'); return; }
+    const payload = { ...data, clienteId: cli.id };
+    delete payload.cliente;
     if(editingId){
-      setCaixa(prev=>prev.map(e=>e.id===editingId?{...e, ...data}:e));
+      const { error } = await supabaseClient.from('caixa_lancamentos').update(caixaToRow(payload)).eq('id', editingId);
+      if(error){ showToast('Erro ao salvar lançamento: ' + error.message); return; }
+      await loadCaixa();
       logAudit('Editou lançamento de caixa', `${data.cliente} — ${fmtBRL(data.valor)} (venc. ${data.vencimento})`);
       showToast('Lançamento atualizado com sucesso!');
     } else {
-      setCaixa(prev=>[...prev, { id:uid('cx'), status:'pendente', dataPagamento:null, ...data }]);
+      const { error } = await supabaseClient.from('caixa_lancamentos').insert(caixaToRow(payload));
+      if(error){ showToast('Erro ao adicionar lançamento: ' + error.message); return; }
+      await loadCaixa();
       const ref = mesReferencia(data.vencimento);
       logAudit('Criou lançamento de caixa', `${data.cliente} — ${fmtBRL(data.valor)} (venc. ${data.vencimento})`);
       showToast('Lançamento adicionado — somado ao total de "' + ref.label + '"');
     }
   }
-  function deleteCaixa(id){
+  async function deleteCaixa(id){
     if(!window.confirm('Excluir este lançamento?')) return;
     const e = caixa.find(x=>x.id===id);
-    setCaixa(prev=>prev.filter(e=>e.id!==id));
+    const { error } = await supabaseClient.from('caixa_lancamentos').delete().eq('id', id);
+    if(error){ showToast('Erro ao excluir lançamento: ' + error.message); return; }
+    setCaixa(prev=>prev.filter(x=>x.id!==id));
     logAudit('Excluiu lançamento de caixa', e ? `${e.cliente} — ${fmtBRL(e.valor)}` : id);
     showToast('Lançamento excluído.');
   }
-  function marcarPago(id, dataPagamento){
-    setCaixa(prev=>prev.map(e=>e.id===id?{...e, status:'pago', dataPagamento: dataPagamento || new Date().toISOString().slice(0,10)}:e));
+  async function marcarPago(id, dataPagamento){
+    const dataFinal = dataPagamento || new Date().toISOString().slice(0,10);
+    const { error } = await supabaseClient.from('caixa_lancamentos').update({ status:'pago', data_pagamento: dataFinal }).eq('id', id);
+    if(error){ showToast('Erro ao marcar como pago: ' + error.message); return; }
+    await loadCaixa();
     const e = caixa.find(x=>x.id===id);
     logAudit('Marcou lançamento como pago', e ? `${e.cliente} — ${fmtBRL(e.valor)}` : id);
     showToast('Lançamento marcado como pago!');
   }
   // Gera lançamentos futuros com base na periodicidade de cada cliente (mensal/
   // trimestral/anual), evitando duplicar um mesmo período. Cobre os próximos 12 meses.
-  function gerarCobrancasFuturas(){
+  async function gerarCobrancasFuturas(){
     const hoje = new Date();
-    let criados = 0;
-    setCaixa(prev=>{
-      const novos = [...prev];
-      clientes.forEach(c=>{
-        const passo = PERIODICIDADE_MESES[c.periodicidade] || 1;
-        for(let i=0; i<12; i+=passo){
-          const d = new Date(hoje.getFullYear(), hoje.getMonth()+i, Math.min(10,28));
-          const venc = d.toISOString().slice(0,10);
-          const jaExiste = novos.some(e=>e.cliente===c.nome && e.vencimento.slice(0,7)===venc.slice(0,7));
-          if(!jaExiste){
-            novos.push({ id:uid('cx'), cliente:c.nome, valor:c.valorMensal, vencimento:venc, status:'pendente', dataPagamento:null, anexos:{boleto:null,nota:null} });
-            criados++;
-          }
+    const novos = [];
+    clientes.forEach(c=>{
+      const passo = PERIODICIDADE_MESES[c.periodicidade] || 1;
+      for(let i=0; i<12; i+=passo){
+        const d = new Date(hoje.getFullYear(), hoje.getMonth()+i, Math.min(10,28));
+        const venc = d.toISOString().slice(0,10);
+        const jaExiste = caixa.some(e=>e.clienteId===c.id && e.vencimento.slice(0,7)===venc.slice(0,7));
+        if(!jaExiste){
+          novos.push({ cliente_id:c.id, valor:c.valorMensal, vencimento:venc, status:'pendente', data_pagamento:null });
         }
-      });
-      return novos;
+      }
     });
-    logAudit('Gerou cobranças futuras', `${criados} lançamento(s) criado(s) para os próximos 12 meses`);
-    showToast(criados>0 ? `${criados} cobrança(s) futura(s) gerada(s)!` : 'Nenhuma cobrança nova — já estava tudo gerado.');
+    if(novos.length===0){ showToast('Nenhuma cobrança nova — já estava tudo gerado.'); return; }
+    const { error } = await supabaseClient.from('caixa_lancamentos').insert(novos);
+    if(error){ showToast('Erro ao gerar cobranças: ' + error.message); return; }
+    await loadCaixa();
+    logAudit('Gerou cobranças futuras', `${novos.length} lançamento(s) criado(s) para os próximos 12 meses`);
+    showToast(`${novos.length} cobrança(s) futura(s) gerada(s)!`);
   }
 
   // ---------- Orçamentos ----------
