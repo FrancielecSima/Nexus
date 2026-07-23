@@ -21,6 +21,7 @@ function PageFinChamados({ tickets, equipe, onOpenModal, onStatusChange, onAssig
   });
 
   const abertosNaoAtendidos = tickets.filter(t=>t.status!=='encerrado' && !t.primeiraRespostaEm);
+  const atrasados = tickets.filter(isAtrasado);
   const comSlaCalculavel = tickets.filter(t=>t.primeiraRespostaEm);
   const slaMedioMs = comSlaCalculavel.length
     ? comSlaCalculavel.reduce((s,t)=>s+(new Date(t.primeiraRespostaEm)-new Date(t.criadoEm)),0) / comSlaCalculavel.length
@@ -28,9 +29,10 @@ function PageFinChamados({ tickets, equipe, onOpenModal, onStatusChange, onAssig
 
   return (
     <React.Fragment>
-      <div className="grid g3" style={{marginBottom:18}}>
+      <div className="grid g3" style={{marginBottom:18, gridTemplateColumns:'repeat(4, 1fr)'}}>
         <Kpi label="Chamados Filtrados" value={String(filtrados.length)} delta={'de '+tickets.length+' no total'} dir="up"/>
         <Kpi label="Sem 1ª resposta ainda" value={String(abertosNaoAtendidos.length)} delta="precisam de atenção" dir={abertosNaoAtendidos.length>0?'down':'up'} tone="pink"/>
+        <Kpi label="Atrasados (fora do SLA)" value={String(atrasados.length)} delta={atrasados.length>0 ? 'precisam de atenção urgente' : 'tudo dentro do prazo'} dir={atrasados.length>0?'down':'up'} tone={atrasados.length>0?'pink':undefined}/>
         <Kpi label="SLA médio (1ª resposta)" value={slaMedioMs!=null?fmtDuracao(slaMedioMs):'—'} delta="calculado a partir dos chamados" dir="up"/>
       </div>
 
@@ -67,10 +69,11 @@ function PageFinChamados({ tickets, equipe, onOpenModal, onStatusChange, onAssig
             {filtrados.map(t=>{
               const resp = equipe.find(e=>e.id===t.responsavelId);
               const tempoResposta = t.primeiraRespostaEm ? (new Date(t.primeiraRespostaEm)-new Date(t.criadoEm)) : null;
+              const atrasado = isAtrasado(t);
               return (
-                <tr key={t.id}>
+                <tr key={t.id} className={atrasado ? 'row-atrasado' : ''}>
                   <td><b>{t.cliente}</b></td>
-                  <td>{t.id} · {t.title}</td>
+                  <td>#{t.numero} · {t.title} {atrasado && <span className="badge b-danger" style={{marginLeft:6, fontSize:9.5}}>⏰ Atrasado</span>}</td>
                   <td><span className={"badge "+(t.priority==='Alta'?'b-rosa':t.priority==='Média'?'b-laranja':'b-carvao')}>{t.priority}</span></td>
                   <td>
                     <select className="status-select" value={t.responsavelId||''} onChange={e=>onAssign(t.id, e.target.value)}>

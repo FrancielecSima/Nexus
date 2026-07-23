@@ -1,8 +1,9 @@
 /* ============================================================
    MODAL (detalhes do chamado)
 ============================================================ */
-function TicketModal({ ticket, equipe, onClose, onSendInfo, onAssign }){
+function TicketModal({ ticket, equipe, onClose, onSendInfo, onAssign, onAddNotaInterna }){
   const [msg, setMsg] = useState('');
+  const [nota, setNota] = useState('');
   if(!ticket) return null;
 
   const tempoResposta = ticket.primeiraRespostaEm ? (new Date(ticket.primeiraRespostaEm) - new Date(ticket.criadoEm)) : null;
@@ -13,7 +14,7 @@ function TicketModal({ ticket, equipe, onClose, onSendInfo, onAssign }){
     <div className="modal-overlay open" onClick={(e)=>{ if(e.target===e.currentTarget) onClose(); }}>
       <div className="modal-box">
         <button className="modal-close" onClick={onClose}><IconClose/></button>
-        <h3>#{ticket.numero} · {ticket.title}</h3>
+        <h3>#{ticket.numero} · {ticket.title} {isAtrasado(ticket) && <span className="badge b-danger" style={{marginLeft:8, verticalAlign:'middle'}}>⏰ Atrasado</span>}</h3>
         <div className="m-sub">Solicitado por {ticket.cliente} · {fmtDataHora(ticket.criadoEm)}</div>
         <div className="kv-row"><span>Categoria</span><span>{ticket.categoria}</span></div>
         <div className="kv-row"><span>Prioridade</span><span>{ticket.priority}</span></div>
@@ -35,10 +36,23 @@ function TicketModal({ ticket, equipe, onClose, onSendInfo, onAssign }){
           <div style={{marginBottom:16}}>
             <b style={{fontSize:'12.5px'}}>Histórico</b>
             <div style={{marginTop:8}}>
-              {ticket.history.map((h,i)=>(<div className="history-item" key={i}>{h.text}<br/><span style={{color:'var(--gray)'}}>{h.time}</span></div>))}
+              {ticket.history.map((h,i)=>(
+                <div className={"history-item" + (h.interno ? ' interno' : '')} key={i}>
+                  {h.interno && <div className="interno-tag">🔒 Nota interna — só a equipe vê</div>}
+                  {h.text}<br/><span style={{color:'var(--gray)'}}>{h.time}</span>
+                </div>
+              ))}
             </div>
           </div>
         )}
+        <div className="field-l" style={{marginBottom:12}}>
+          <label>🔒 Nota interna (a equipe vê — o cliente nunca vê isso)</label>
+          <textarea className="text-input wide" value={nota} onChange={e=>setNota(e.target.value)} placeholder="Ex: Cliente já ligou reclamando 2x, priorizar."></textarea>
+        </div>
+        <div className="form-actions" style={{marginBottom:20}}>
+          <button className="btn-mini ghost" onClick={()=>{ if(nota.trim()){ onAddNotaInterna(ticket.id, nota.trim()); setNota(''); } }}>Adicionar Nota Interna</button>
+        </div>
+
         <div className="field-l" style={{marginBottom:12}}>
           <label>Solicitar mais informações ao cliente</label>
           <textarea className="text-input wide" value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Ex: Poderia enviar um print do erro?"></textarea>

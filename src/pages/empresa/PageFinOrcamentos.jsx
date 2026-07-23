@@ -3,6 +3,7 @@
 ============================================================ */
 function PageFinOrcamentos({ orcamentos, clientes, servicos, onAdd, onStatusChange, goPage }){
   const [clienteId,setClienteId] = useState(clientes[0]?.id || '');
+  const [busca, setBusca] = useState('');
   const [itemName,setItemName] = useState(servicos[0]?.nome || '');
   const [valor,setValor] = useState(servicos[0] ? String(servicos[0].valor) : '');
   const [comissao,setComissao] = useState(servicos[0] ? (servicos[0].valor*servicos[0].comissaoPercent/100).toFixed(2) : '');
@@ -48,10 +49,17 @@ function PageFinOrcamentos({ orcamentos, clientes, servicos, onAdd, onStatusChan
         <p style={{fontSize:11.5,color:'var(--gray)',marginTop:14}}>Não encontrou o serviço? Cadastre em <a href="#" onClick={(e)=>{e.preventDefault(); goPage('fin-servicos');}} style={{color:'var(--laranja)', fontWeight:700}}>Financeiro → Serviços</a>.</p>
       </div>
       <div className="card">
-        <div className="card-head"><div className="bar" style={{background:'var(--rosa)'}}></div><h3>Orçamentos e Andamento</h3></div>
+        <div className="card-head" style={{justifyContent:'space-between', display:'flex', flexWrap:'wrap', gap:10}}>
+          <div style={{display:'flex', alignItems:'center', gap:10}}><div className="bar" style={{background:'var(--rosa)'}}></div><h3>Orçamentos e Andamento</h3></div>
+          <input className="text-input" style={{width:200}} placeholder="Buscar cliente ou item..." value={busca} onChange={e=>setBusca(e.target.value)}/>
+        </div>
         <table><thead><tr><th>Cliente</th><th>Item</th><th>Valor</th><th>Comissão</th><th>Andamento</th></tr></thead>
           <tbody>
-            {orcamentos.map(o=>(
+            {orcamentos.filter(o=>{
+              if(!busca) return true;
+              const q = busca.toLowerCase();
+              return o.cliente.toLowerCase().includes(q) || o.item.toLowerCase().includes(q);
+            }).map(o=>(
               <tr key={o.id}>
                 <td><b>{o.cliente}</b></td><td>{o.item}</td><td>{fmtBRL(o.valor)}</td><td>{fmtBRL(o.comissao)}</td>
                 <td>
@@ -62,6 +70,11 @@ function PageFinOrcamentos({ orcamentos, clientes, servicos, onAdd, onStatusChan
                 </td>
               </tr>
             ))}
+            {orcamentos.length>0 && orcamentos.filter(o=>{
+              if(!busca) return true;
+              const q = busca.toLowerCase();
+              return o.cliente.toLowerCase().includes(q) || o.item.toLowerCase().includes(q);
+            }).length===0 && <tr><td colSpan="5" className="empty-note-sm">Nenhum orçamento encontrado com essa busca.</td></tr>}
           </tbody>
         </table>
       </div>

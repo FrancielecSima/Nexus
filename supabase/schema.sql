@@ -95,6 +95,7 @@ create table ticket_historico (
   id uuid primary key default gen_random_uuid(),
   ticket_id uuid not null references tickets(id) on delete cascade,
   texto text not null,
+  interno boolean not null default false,      -- true = nota visível só pra equipe, nunca pro cliente
   created_at timestamptz not null default now()
 );
 
@@ -243,9 +244,10 @@ create policy "cliente avalia proprio ticket encerrado" on tickets
 
 create policy "empresa gerencia historico" on ticket_historico
   for all using (is_empresa()) with check (is_empresa());
-create policy "cliente ve historico dos proprios tickets" on ticket_historico
+create policy "cliente ve historico publico dos proprios tickets" on ticket_historico
   for select using (
-    exists (select 1 from tickets t where t.id = ticket_id and cliente_pertence_ao_usuario(t.cliente_id))
+    interno = false
+    and exists (select 1 from tickets t where t.id = ticket_id and cliente_pertence_ao_usuario(t.cliente_id))
   );
 
 create policy "empresa gerencia caixa" on caixa_lancamentos
@@ -286,6 +288,22 @@ create policy "empresa ve auditoria" on audit_log
   for select using (is_empresa());
 create policy "empresa cria registro de auditoria" on audit_log
   for insert with check (is_empresa());
+
+-- ============================================================
+-- TEMPO REAL — necessário pra dashboard atualizar sozinho, sem F5
+-- ============================================================
+alter publication supabase_realtime add table tickets;
+alter publication supabase_realtime add table ticket_historico;
+alter publication supabase_realtime add table notificacoes;
+alter publication supabase_realtime add table caixa_lancamentos;
+
+-- ============================================================
+-- STORAGE — bucket "anexos" (crie manualmente como Private no painel
+-- antes de rodar isso) pra upload real de boletos/notas fiscais
+-- ============================================================
+create policy "empresa gerencia anexos no storage" on storage.objects
+  for all using (bucket_id = 'anexos' and is_empresa())
+  with check (bucket_id = 'anexos' and is_empresa());
 
 -- ============================================================
 -- NOTAS DE MIGRAÇÃO (se você já tinha rodado a v1 deste schema)

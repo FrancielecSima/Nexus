@@ -3,15 +3,25 @@
    Agora com periodicidade de cobrança (mensal/trimestral/anual).
 ============================================================ */
 function FinClientesList({ clientes, onNew, onEdit, onDelete }){
+  const [busca, setBusca] = useState('');
+  const filtrados = busca
+    ? clientes.filter(c=>{
+        const q = busca.toLowerCase();
+        return c.nome.toLowerCase().includes(q) || c.cnpj.toLowerCase().includes(q) || c.email.toLowerCase().includes(q) || c.servico.toLowerCase().includes(q);
+      })
+    : clientes;
   return (
     <div className="card">
-      <div className="card-head" style={{justifyContent:'space-between', display:'flex'}}>
-        <div style={{display:'flex', alignItems:'center', gap:10}}><div className="bar"></div><h3>Clientes Cadastrados ({clientes.length})</h3></div>
-        <button className="btn-mini solid" onClick={onNew}>+ Novo Cliente</button>
+      <div className="card-head" style={{justifyContent:'space-between', display:'flex', flexWrap:'wrap', gap:10}}>
+        <div style={{display:'flex', alignItems:'center', gap:10}}><div className="bar"></div><h3>Clientes Cadastrados ({filtrados.length})</h3></div>
+        <div style={{display:'flex', gap:8}}>
+          <input className="text-input" style={{width:200}} placeholder="Buscar nome, CNPJ, e-mail..." value={busca} onChange={e=>setBusca(e.target.value)}/>
+          <button className="btn-mini solid" onClick={onNew}>+ Novo Cliente</button>
+        </div>
       </div>
       <table><thead><tr><th>Cliente</th><th>CNPJ</th><th>E-mail</th><th>Serviço Prestado</th><th>Valor</th><th>Periodicidade</th><th></th></tr></thead>
         <tbody>
-          {clientes.map(c=>(
+          {filtrados.map(c=>(
             <tr key={c.id}>
               <td><b>{c.nome}</b><br/><span style={{fontSize:11,color:'var(--gray)'}}>{c.endereco}</span></td>
               <td>{c.cnpj}</td>
@@ -27,7 +37,7 @@ function FinClientesList({ clientes, onNew, onEdit, onDelete }){
               </td>
             </tr>
           ))}
-          {clientes.length===0 && <tr><td colSpan="7" className="empty-note-sm">Nenhum cliente cadastrado.</td></tr>}
+          {filtrados.length===0 && <tr><td colSpan="7" className="empty-note-sm">{busca ? 'Nenhum cliente encontrado com essa busca.' : 'Nenhum cliente cadastrado.'}</td></tr>}
         </tbody>
       </table>
     </div>

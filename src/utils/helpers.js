@@ -101,7 +101,7 @@ function ticketFromRow(row){
   const historico = (row.ticket_historico || [])
     .slice()
     .sort((a,b)=> new Date(a.created_at) - new Date(b.created_at))
-    .map(h=>({ text: h.texto, time: fmtDataHora(h.created_at) }));
+    .map(h=>({ text: h.texto, time: fmtDataHora(h.created_at), interno: !!h.interno }));
   return {
     id: row.id,
     numero: row.numero,
@@ -119,6 +119,15 @@ function ticketFromRow(row){
     encerradoEm: row.encerrado_em,
     avaliacao: row.avaliacao,
   };
+}
+
+// Um chamado é considerado atrasado quando está aberto há mais tempo do que
+// o prazo aceitável pra sua prioridade (ver SLA_HORAS em constants.js).
+function isAtrasado(t){
+  if(t.status==='encerrado') return false;
+  const slaHoras = SLA_HORAS[t.priority] || SLA_HORAS['Média'];
+  const decorridoMs = Date.now() - new Date(t.criadoEm).getTime();
+  return decorridoMs > slaHoras*3600*1000;
 }
 
 // Converte uma linha da tabela `clientes` (Supabase, snake_case) para o

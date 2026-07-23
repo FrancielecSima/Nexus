@@ -12,3 +12,7 @@ const STATUS_PAGAMENTO_BADGE  = { pendente:'b-laranja', pago:'b-green', atrasado
 
 const PERIODICIDADE_LABELS = { mensal:'Mensal', trimestral:'Trimestral', anual:'Anual' };
 const PERIODICIDADE_MESES  = { mensal:1, trimestral:3, anual:12 };
+
+// Prazo (em horas) considerado aceitável pra um chamado seguir aberto,
+// a partir da abertura, de acordo com a prioridade. Passou disso: "atrasado".
+const SLA_HORAS = { 'Alta':4, 'Média':8, 'Baixa':24 };

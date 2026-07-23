@@ -4,6 +4,7 @@
 function PageFinServicos({ servicos, onSave, onDelete, showToast }){
   const [editing, setEditing] = useState(null);
   const editingObj = editing ? servicos.find(s=>s.id===editing) : null;
+  const [busca, setBusca] = useState('');
   const [nome,setNome] = useState('');
   const [valor,setValor] = useState('');
   const [comissao,setComissao] = useState('');
@@ -44,10 +45,13 @@ function PageFinServicos({ servicos, onSave, onDelete, showToast }){
         </form>
       </div>
       <div className="card">
-        <div className="card-head"><div className="bar" style={{background:'var(--rosa)'}}></div><h3>Serviços Cadastrados ({servicos.length})</h3></div>
+        <div className="card-head" style={{justifyContent:'space-between', display:'flex', flexWrap:'wrap', gap:10}}>
+          <div style={{display:'flex', alignItems:'center', gap:10}}><div className="bar" style={{background:'var(--rosa)'}}></div><h3>Serviços Cadastrados ({servicos.length})</h3></div>
+          <input className="text-input" style={{width:170}} placeholder="Buscar serviço..." value={busca} onChange={e=>setBusca(e.target.value)}/>
+        </div>
         <table><thead><tr><th>Serviço</th><th>Valor Padrão</th><th>Comissão</th><th></th></tr></thead>
           <tbody>
-            {servicos.map(s=>(
+            {servicos.filter(s=>!busca || s.nome.toLowerCase().includes(busca.toLowerCase())).map(s=>(
               <tr key={s.id}>
                 <td><b>{s.nome}</b></td><td>{fmtBRL(s.valor)}</td><td>{s.comissaoPercent}%</td>
                 <td>
@@ -58,6 +62,7 @@ function PageFinServicos({ servicos, onSave, onDelete, showToast }){
                 </td>
               </tr>
             ))}
+            {servicos.length>0 && servicos.filter(s=>!busca || s.nome.toLowerCase().includes(busca.toLowerCase())).length===0 && <tr><td colSpan="4" className="empty-note-sm">Nenhum serviço encontrado com essa busca.</td></tr>}
           </tbody>
         </table>
         <p style={{fontSize:11.5,color:'var(--gray)',marginTop:14}}>Estes serviços ficam disponíveis para seleção rápida na aba <b>Orçamentos</b>.</p>

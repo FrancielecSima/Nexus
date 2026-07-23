@@ -3,7 +3,7 @@
    Agora com status de pagamento real, lançamentos retroativos e
    geração automática de cobranças futuras conforme periodicidade.
 ============================================================ */
-function FinCaixaList({ entries, onEdit, onDelete, onMarcarPago }){
+function FinCaixaList({ entries, onEdit, onDelete, onMarcarPago, onDownloadAnexo }){
   const [filtroAno, setFiltroAno] = useState('todos');
   const [busca, setBusca] = useState('');
 
@@ -33,7 +33,11 @@ function FinCaixaList({ entries, onEdit, onDelete, onMarcarPago }){
               <td><b>{e.cliente}</b></td>
               <td>{fmtBRL(e.valor)}</td>
               <td>{new Date(e.vencimento+'T00:00:00').toLocaleDateString('pt-BR')}</td>
-              <td style={{fontSize:11.5,color:'var(--gray)'}}>📎 {e.anexos && (e.anexos.boleto||e.anexos.nota) ? [e.anexos.boleto&&'Boleto', e.anexos.nota&&'Nota Fiscal'].filter(Boolean).join(' · ') : '—'}</td>
+              <td style={{fontSize:11.5}}>
+                {e.anexos && e.anexos.boleto && <div><button className="link-btn" onClick={()=>onDownloadAnexo(e.anexos.boleto)}>📎 Boleto</button></div>}
+                {e.anexos && e.anexos.nota && <div><button className="link-btn" onClick={()=>onDownloadAnexo(e.anexos.nota)}>📎 Nota Fiscal</button></div>}
+                {(!e.anexos || (!e.anexos.boleto && !e.anexos.nota)) && <span style={{color:'var(--gray)'}}>—</span>}
+              </td>
               <td>
                 <span className={"badge "+STATUS_PAGAMENTO_BADGE[e.statusEfetivo]}>{STATUS_PAGAMENTO_LABELS[e.statusEfetivo]}</span>
                 {e.status==='pago' && <div style={{fontSize:10.5,color:'var(--gray)',marginTop:3}}>em {new Date(e.dataPagamento+'T00:00:00').toLocaleDateString('pt-BR')}</div>}
@@ -64,15 +68,13 @@ function FinCaixaForm({ editingEntry, clientes, onSave, onCancel }){
   function submit(e){
     e.preventDefault();
     if(!valor || !vencimento) return;
-    const boletoFile = boletoRef.current.files[0];
-    const nfFile = nfRef.current.files[0];
+    const boletoFile = boletoRef.current.files[0] || null;
+    const notaFile = nfRef.current.files[0] || null;
     onSave({
       clienteId, valor:parseFloat(valor), vencimento,
       status, dataPagamento: status==='pago' ? dataPagamento : null,
-      anexos:{
-        boleto: boletoFile ? boletoFile.name : (editingEntry?.anexos?.boleto || null),
-        nota: nfFile ? nfFile.name : (editingEntry?.anexos?.nota || null),
-      }
+      boletoFile, notaFile,
+      anexosAtuais: editingEntry?.anexos || null,
     });
   }
   return (
@@ -106,8 +108,8 @@ function FinCaixaForm({ editingEntry, clientes, onSave, onCancel }){
           )}
         </div>
         <div className="form-grid" style={{marginBottom:20}}>
-          <div className="field-l"><label>Anexar Boleto {editingEntry?.anexos?.boleto ? '(atual: '+editingEntry.anexos.boleto+')' : ''}</label><input type="file" className="text-input" ref={boletoRef}/></div>
-          <div className="field-l"><label>Anexar Nota Fiscal {editingEntry?.anexos?.nota ? '(atual: '+editingEntry.anexos.nota+')' : ''}</label><input type="file" className="text-input" ref={nfRef}/></div>
+          <div className="field-l"><label>Anexar Boleto {editingEntry?.anexos?.boleto ? '(já tem um anexado — escolher outro substitui)' : ''}</label><input type="file" className="text-input" ref={boletoRef}/></div>
+          <div className="field-l"><label>Anexar Nota Fiscal {editingEntry?.anexos?.nota ? '(já tem uma anexada — escolher outra substitui)' : ''}</label><input type="file" className="text-input" ref={nfRef}/></div>
         </div>
         <div className="form-actions">
           <button className="btn-mini solid" type="submit">{editingEntry ? 'Salvar Alterações' : 'Adicionar ao Caixa'}</button>
@@ -117,7 +119,7 @@ function FinCaixaForm({ editingEntry, clientes, onSave, onCancel }){
     </div>
   );
 }
-function PageFinCaixa({ caixa, clientes, onSave, onDelete, onMarcarPago, onGerarCobrancas }){
+function PageFinCaixa({ caixa, clientes, onSave, onDelete, onMarcarPago, onGerarCobrancas, onDownloadAnexo }){
   const [view, setView] = useState('lista');
   const [editing, setEditing] = useState(null);
   const editingEntry = editing ? caixa.find(e=>e.id===editing) : null;
@@ -143,7 +145,7 @@ function PageFinCaixa({ caixa, clientes, onSave, onDelete, onMarcarPago, onGerar
       </div>
       {view==='lancamento'
         ? <FinCaixaForm editingEntry={editingEntry} clientes={clientes} onSave={(data)=>{ onSave(data, editing); setView('lista'); setEditing(null); }} onCancel={()=>{setView('lista'); setEditing(null);}}/>
-        : <FinCaixaList entries={caixa} onEdit={(id)=>{setEditing(id); setView('lancamento');}} onDelete={onDelete} onMarcarPago={onMarcarPago}/>
+        : <FinCaixaList entries={caixa} onEdit={(id)=>{setEditing(id); setView('lancamento');}} onDelete={onDelete} onMarcarPago={onMarcarPago} onDownloadAnexo={onDownloadAnexo}/>
       }
     </React.Fragment>
   );

@@ -249,6 +249,7 @@
   .b-laranja{ background:var(--laranja); }
   .b-rosa{ background:var(--rosa); }
   .b-carvao{ background:var(--carvao-3); }
+  .b-danger{ background:#C0392B; }
 
   .bars{ display:flex; align-items:flex-end; gap:14px; height:180px; padding-top:10px; }
   .bars .col{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; height:100%; gap:8px; }
@@ -357,6 +358,12 @@
   .kv-row span:first-child{ color:var(--gray); font-weight:600; }
   .kv-row span:last-child{ font-weight:700; text-align:right; }
   .history-item{ background:var(--bg); border-radius:10px; padding:10px 12px; font-size:12px; margin-bottom:8px; color:var(--text-2); }
+  .history-item.interno{ background:#FFF7E0; border:1px solid #F0D889; }
+  .history-item .interno-tag{ display:inline-block; font-size:10px; font-weight:800; color:#8A6D00; background:#FFEBB0; padding:2px 7px; border-radius:100px; margin-bottom:5px; }
+  tr.row-atrasado{ background:var(--rosa-light); }
+  tr.row-atrasado td{ border-color:#F8C6DE; }
+  .link-btn{ background:none; border:none; padding:0; color:var(--laranja); font-weight:700; font-size:11.5px; cursor:pointer; text-decoration:underline; }
+  .link-btn:hover{ color:var(--laranja-dark); }
 
   /* ---- Status select in tables ---- */
   .status-select{ padding:7px 10px; border-radius:8px; border:1.5px solid var(--line); font-size:11.5px; font-weight:700; background:#fff; color:var(--text); }

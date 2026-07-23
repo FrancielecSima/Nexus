@@ -137,6 +137,21 @@ function App(){
     loadTickets();
   }, [loggedIn, role, currentClienteId]);
 
+  // ---------- Tempo real (Supabase Realtime) ----------
+  // Assim que algo muda no banco (novo chamado, resposta, notificação, pagamento),
+  // o app atualiza sozinho — sem precisar recarregar a página.
+  useEffect(()=>{
+    if(!loggedIn || !authUser) return;
+    const channel = supabaseClient
+      .channel('nexus-realtime-' + authUser.id)
+      .on('postgres_changes', { event:'*', schema:'public', table:'tickets' }, ()=>{ loadTickets(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'ticket_historico' }, ()=>{ loadTickets(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'notificacoes', filter:`user_id=eq.${authUser.id}` }, ()=>{ loadNotifs(); })
+      .on('postgres_changes', { event:'*', schema:'public', table:'caixa_lancamentos' }, ()=>{ if(role==='empresa') loadCaixa(); })
+      .subscribe();
+    return ()=>{ supabaseClient.removeChannel(channel); };
+  }, [loggedIn, authUser && authUser.id, role]);
+
   async function loadClientes(){
     const { data, error } = await supabaseClient.from('clientes').select('*').order('created_at', {ascending:true});
     if(error){ showToast('Erro ao carregar clientes: ' + error.message); return; }
@@ -302,6 +317,12 @@ function App(){
     showToast('Solicitação enviada ao cliente');
     setModalTicketId(null);
   }
+  async function addNotaInterna(id, texto){
+    const { error } = await supabaseClient.from('ticket_historico').insert({ ticket_id: id, texto, interno: true });
+    if(error){ showToast('Erro ao salvar nota interna: ' + error.message); return; }
+    await loadTickets();
+    showToast('Nota interna adicionada.');
+  }
   async function assignResponsavel(id, responsavelId){
     const { error } = await supabaseClient.from('tickets').update({ responsavel_id: responsavelId || null }).eq('id', id);
     if(error){ showToast('Erro ao atribuir responsável: ' + error.message); return; }
@@ -405,21 +426,43 @@ function App(){
   }
 
   // ---------- Caixa ----------
+  async function uploadAnexoCaixa(caixaId, tipo, file){
+    const path = `caixa/${caixaId}/${tipo}-${Date.now()}-${file.name}`;
+    const { error } = await supabaseClient.storage.from('anexos').upload(path, file, { upsert:true });
+    if(error){ showToast(`Erro ao enviar ${tipo}: ` + error.message); return null; }
+    return path;
+  }
+  async function baixarAnexoCaixa(path){
+    if(!path) return;
+    const { data, error } = await supabaseClient.storage.from('anexos').createSignedUrl(path, 60);
+    if(error){ showToast('Erro ao abrir anexo: ' + error.message); return; }
+    window.open(data.signedUrl, '_blank');
+  }
   async function saveCaixa(data, editingId){
     const cli = clientes.find(c=>c.id===data.clienteId);
     if(!cli){ showToast('Cliente não encontrado.'); return; }
+    const { boletoFile, notaFile, anexosAtuais, ...campos } = data;
     if(editingId){
-      const { error } = await supabaseClient.from('caixa_lancamentos').update(caixaToRow(data)).eq('id', editingId);
+      const anexos = { boleto: anexosAtuais?.boleto || null, nota: anexosAtuais?.nota || null };
+      if(boletoFile){ const p = await uploadAnexoCaixa(editingId, 'boleto', boletoFile); if(p) anexos.boleto = p; }
+      if(notaFile){ const p = await uploadAnexoCaixa(editingId, 'nota', notaFile); if(p) anexos.nota = p; }
+      const { error } = await supabaseClient.from('caixa_lancamentos').update(caixaToRow({ ...campos, anexos })).eq('id', editingId);
       if(error){ showToast('Erro ao salvar lançamento: ' + error.message); return; }
       await loadCaixa();
-      logAudit('Editou lançamento de caixa', `${cli.nome} — ${fmtBRL(data.valor)} (venc. ${data.vencimento})`);
+      logAudit('Editou lançamento de caixa', `${cli.nome} — ${fmtBRL(campos.valor)} (venc. ${campos.vencimento})`);
       showToast('Lançamento atualizado com sucesso!');
     } else {
-      const { error } = await supabaseClient.from('caixa_lancamentos').insert(caixaToRow(data));
+      const { data: row, error } = await supabaseClient.from('caixa_lancamentos').insert(caixaToRow({ ...campos, anexos:{boleto:null,nota:null} })).select().single();
       if(error){ showToast('Erro ao adicionar lançamento: ' + error.message); return; }
+      const anexos = { boleto:null, nota:null };
+      if(boletoFile){ const p = await uploadAnexoCaixa(row.id, 'boleto', boletoFile); if(p) anexos.boleto = p; }
+      if(notaFile){ const p = await uploadAnexoCaixa(row.id, 'nota', notaFile); if(p) anexos.nota = p; }
+      if(anexos.boleto || anexos.nota){
+        await supabaseClient.from('caixa_lancamentos').update(caixaToRow({ anexos })).eq('id', row.id);
+      }
       await loadCaixa();
-      const ref = mesReferencia(data.vencimento);
-      logAudit('Criou lançamento de caixa', `${cli.nome} — ${fmtBRL(data.valor)} (venc. ${data.vencimento})`);
+      const ref = mesReferencia(campos.vencimento);
+      logAudit('Criou lançamento de caixa', `${cli.nome} — ${fmtBRL(campos.valor)} (venc. ${campos.vencimento})`);
       showToast('Lançamento adicionado — somado ao total de "' + ref.label + '"');
     }
   }
@@ -592,7 +635,7 @@ function App(){
           <div id="page-content">
             {role==='empresa' && page==='financeiro' && <PageFinanceiro tickets={tickets} caixa={caixa} orcamentos={orcamentos} gastos={gastos} terceirizados={terceirizados} onSaveTerceirizado={saveTerceirizado} onDeleteTerceirizado={deleteTerceirizado} clientes={clientes} equipe={equipe}/>}
             {role==='empresa' && page==='fin-clientes' && <PageFinClientes clientes={clientes} onSave={saveClient} onDelete={deleteClient}/>}
-            {role==='empresa' && page==='fin-caixa' && <PageFinCaixa caixa={caixa} clientes={clientes} onSave={saveCaixa} onDelete={deleteCaixa} onMarcarPago={marcarPago} onGerarCobrancas={gerarCobrancasFuturas}/>}
+            {role==='empresa' && page==='fin-caixa' && <PageFinCaixa caixa={caixa} clientes={clientes} onSave={saveCaixa} onDelete={deleteCaixa} onMarcarPago={marcarPago} onGerarCobrancas={gerarCobrancasFuturas} onDownloadAnexo={baixarAnexoCaixa}/>}
             {role==='empresa' && page==='fin-orcamentos' && <PageFinOrcamentos orcamentos={orcamentos} clientes={clientes} servicos={servicos} onAdd={addOrcamento} onStatusChange={updateOrcamentoStatus} goPage={goPage}/>}
             {role==='empresa' && page==='fin-servicos' && <PageFinServicos servicos={servicos} onSave={saveServico} onDelete={deleteServico} showToast={showToast}/>}
             {role==='empresa' && page==='fin-gastos' && <PageGastos gastos={gastos} onSave={saveGasto} onDelete={deleteGasto} onGerarRecorrentes={gerarGastosRecorrentes}/>}
@@ -609,7 +652,7 @@ function App(){
           </div>
         </main>
       </div>
-      <TicketModal ticket={modalTicket} equipe={equipe} onClose={()=>setModalTicketId(null)} onSendInfo={sendInfo} onAssign={assignResponsavel}/>
+      <TicketModal ticket={modalTicket} equipe={equipe} onClose={()=>setModalTicketId(null)} onSendInfo={sendInfo} onAssign={assignResponsavel} onAddNotaInterna={addNotaInterna}/>
       <Toast msg={toastMsg}/>
     </div>
   );

@@ -4,6 +4,7 @@
 function PageGastos({ gastos, onSave, onDelete, onGerarRecorrentes }){
   const [editing, setEditing] = useState(null);
   const editingObj = editing ? gastos.find(g=>g.id===editing) : null;
+  const [busca, setBusca] = useState('');
   const [desc,setDesc] = useState('');
   const [valor,setValor] = useState('');
   const [vencimento,setVencimento] = useState('');
@@ -62,13 +63,16 @@ function PageGastos({ gastos, onSave, onDelete, onGerarRecorrentes }){
           </form>
         </div>
         <div className="card">
-          <div className="card-head" style={{justifyContent:'space-between', display:'flex'}}>
+          <div className="card-head" style={{justifyContent:'space-between', display:'flex', flexWrap:'wrap', gap:10}}>
             <div style={{display:'flex', alignItems:'center', gap:10}}><div className="bar" style={{background:'var(--rosa)'}}></div><h3>Gastos Cadastrados ({gastos.length})</h3></div>
-            <button className="btn-mini ghost" onClick={onGerarRecorrentes} title="Duplica os gastos fixos marcados como recorrentes para o mês atual, se ainda não existirem">↻ Gerar Recorrentes do Mês</button>
+            <div style={{display:'flex', gap:8}}>
+              <input className="text-input" style={{width:170}} placeholder="Buscar descrição..." value={busca} onChange={e=>setBusca(e.target.value)}/>
+              <button className="btn-mini ghost" onClick={onGerarRecorrentes} title="Duplica os gastos fixos marcados como recorrentes para o mês atual, se ainda não existirem">↻ Gerar Recorrentes do Mês</button>
+            </div>
           </div>
           <table><thead><tr><th>Descrição</th><th>Valor</th><th>Vencimento</th><th>Categoria</th><th></th></tr></thead>
             <tbody>
-              {[...gastos].sort((a,b)=>b.vencimento.localeCompare(a.vencimento)).map(g=>(
+              {[...gastos].filter(g=>!busca || g.desc.toLowerCase().includes(busca.toLowerCase())).sort((a,b)=>b.vencimento.localeCompare(a.vencimento)).map(g=>(
                 <tr key={g.id}>
                   <td><b>{g.desc}</b>{g.recorrente && <span className="badge b-carvao" style={{marginLeft:6, fontSize:9.5}}>recorrente</span>}</td>
                   <td>{fmtBRL(g.valor)}</td>
@@ -83,6 +87,7 @@ function PageGastos({ gastos, onSave, onDelete, onGerarRecorrentes }){
                 </tr>
               ))}
               {gastos.length===0 && <tr><td colSpan="5" className="empty-note-sm">Nenhum gasto cadastrado.</td></tr>}
+              {gastos.length>0 && busca && ![...gastos].some(g=>g.desc.toLowerCase().includes(busca.toLowerCase())) && <tr><td colSpan="5" className="empty-note-sm">Nenhum gasto encontrado com essa busca.</td></tr>}
             </tbody>
           </table>
         </div>
