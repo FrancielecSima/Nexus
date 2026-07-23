@@ -54,7 +54,7 @@ function FinCaixaList({ entries, onEdit, onDelete, onMarcarPago }){
   );
 }
 function FinCaixaForm({ editingEntry, clientes, onSave, onCancel }){
-  const [cliente,setCliente]=useState(editingEntry?.cliente || (clientes[0]&&clientes[0].nome) || '');
+  const [clienteId,setClienteId]=useState(editingEntry?.clienteId || (clientes[0]&&clientes[0].id) || '');
   const [valor,setValor]=useState(editingEntry? String(editingEntry.valor) : '');
   const [vencimento,setVencimento]=useState(editingEntry?.vencimento || '');
   const [status,setStatus]=useState(editingEntry?.status || 'pendente');
@@ -67,7 +67,7 @@ function FinCaixaForm({ editingEntry, clientes, onSave, onCancel }){
     const boletoFile = boletoRef.current.files[0];
     const nfFile = nfRef.current.files[0];
     onSave({
-      cliente, valor:parseFloat(valor), vencimento,
+      clienteId, valor:parseFloat(valor), vencimento,
       status, dataPagamento: status==='pago' ? dataPagamento : null,
       anexos:{
         boleto: boletoFile ? boletoFile.name : (editingEntry?.anexos?.boleto || null),
@@ -81,8 +81,8 @@ function FinCaixaForm({ editingEntry, clientes, onSave, onCancel }){
       <form onSubmit={submit}>
         <div className="field-l" style={{marginBottom:14}}>
           <label>Cliente</label>
-          <select className="select-input" value={cliente} onChange={e=>setCliente(e.target.value)}>
-            {clientes.map(c=><option key={c.id}>{c.nome}</option>)}
+          <select className="select-input" value={clienteId} onChange={e=>setClienteId(e.target.value)}>
+            {clientes.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
           </select>
         </div>
         <div className="form-grid" style={{marginBottom:14}}>

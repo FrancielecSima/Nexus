@@ -2,7 +2,7 @@
    EMPRESA > FINANCEIRO > ORÇAMENTOS (usa catálogo de serviços)
 ============================================================ */
 function PageFinOrcamentos({ orcamentos, clientes, servicos, onAdd, onStatusChange, goPage }){
-  const [cliente,setCliente] = useState(clientes[0]?.nome || '');
+  const [clienteId,setClienteId] = useState(clientes[0]?.id || '');
   const [itemName,setItemName] = useState(servicos[0]?.nome || '');
   const [valor,setValor] = useState(servicos[0] ? String(servicos[0].valor) : '');
   const [comissao,setComissao] = useState(servicos[0] ? (servicos[0].valor*servicos[0].comissaoPercent/100).toFixed(2) : '');
@@ -19,7 +19,7 @@ function PageFinOrcamentos({ orcamentos, clientes, servicos, onAdd, onStatusChan
   function submit(e){
     e.preventDefault();
     if(!itemName || !valor) return;
-    onAdd({ cliente, item:itemName, valor:parseFloat(valor), comissao:parseFloat(comissao)||0 });
+    onAdd({ clienteId, item:itemName, valor:parseFloat(valor), comissao:parseFloat(comissao)||0 });
   }
 
   return (
@@ -29,8 +29,8 @@ function PageFinOrcamentos({ orcamentos, clientes, servicos, onAdd, onStatusChan
         <form onSubmit={submit}>
           <div className="field-l" style={{marginBottom:14}}>
             <label>Cliente</label>
-            <select className="select-input" value={cliente} onChange={e=>setCliente(e.target.value)}>
-              {clientes.map(c=><option key={c.id}>{c.nome}</option>)}
+            <select className="select-input" value={clienteId} onChange={e=>setClienteId(e.target.value)}>
+              {clientes.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
             </select>
           </div>
           <div className="field-l" style={{marginBottom:14}}>

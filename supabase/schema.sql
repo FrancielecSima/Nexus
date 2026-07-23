@@ -203,7 +203,7 @@ alter table notificacoes enable row level security;
 alter table audit_log enable row level security;
 
 create or replace function is_empresa()
-returns boolean language sql stable as $$
+returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from profiles where id = auth.uid() and role = 'empresa');
 $$;
 
@@ -259,8 +259,26 @@ create policy "ve proprias notificacoes" on notificacoes
   for select using (user_id = auth.uid());
 create policy "marca proprias notificacoes como lidas" on notificacoes
   for update using (user_id = auth.uid());
-create policy "sistema cria notificacoes" on notificacoes
-  for insert with check (auth.uid() is not null);
+create policy "cria notificacao propria ou empresa notifica cliente" on notificacoes
+  for insert with check (user_id = auth.uid() or is_empresa());
+
+-- Função segura pra um CLIENTE avisar toda a equipe (novo chamado, avaliação
+-- etc.) sem precisar de permissão de escrita na notificação de terceiros.
+create or replace function notify_empresa(texto text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null then
+    raise exception 'Não autenticado.';
+  end if;
+  insert into notificacoes (user_id, texto)
+  select id, texto from equipe where ativo = true;
+end;
+$$;
+grant execute on function notify_empresa(text) to authenticated;
 
 create policy "empresa ve auditoria" on audit_log
   for select using (is_empresa());

@@ -259,8 +259,7 @@ function App(){
     await supabaseClient.from('notificacoes').insert({ user_id: clienteAuthUserId, texto: text });
   }
   async function notifyEmpresa(text){
-    if(equipe.length===0) return;
-    await supabaseClient.from('notificacoes').insert(equipe.map(e=>({ user_id: e.id, texto: text })));
+    await supabaseClient.rpc('notify_empresa', { texto: text });
   }
 
   // ---------- Chamados ----------
@@ -398,22 +397,20 @@ function App(){
 
   // ---------- Caixa ----------
   async function saveCaixa(data, editingId){
-    const cli = clientes.find(c=>c.nome===data.cliente);
+    const cli = clientes.find(c=>c.id===data.clienteId);
     if(!cli){ showToast('Cliente não encontrado.'); return; }
-    const payload = { ...data, clienteId: cli.id };
-    delete payload.cliente;
     if(editingId){
-      const { error } = await supabaseClient.from('caixa_lancamentos').update(caixaToRow(payload)).eq('id', editingId);
+      const { error } = await supabaseClient.from('caixa_lancamentos').update(caixaToRow(data)).eq('id', editingId);
       if(error){ showToast('Erro ao salvar lançamento: ' + error.message); return; }
       await loadCaixa();
-      logAudit('Editou lançamento de caixa', `${data.cliente} — ${fmtBRL(data.valor)} (venc. ${data.vencimento})`);
+      logAudit('Editou lançamento de caixa', `${cli.nome} — ${fmtBRL(data.valor)} (venc. ${data.vencimento})`);
       showToast('Lançamento atualizado com sucesso!');
     } else {
-      const { error } = await supabaseClient.from('caixa_lancamentos').insert(caixaToRow(payload));
+      const { error } = await supabaseClient.from('caixa_lancamentos').insert(caixaToRow(data));
       if(error){ showToast('Erro ao adicionar lançamento: ' + error.message); return; }
       await loadCaixa();
       const ref = mesReferencia(data.vencimento);
-      logAudit('Criou lançamento de caixa', `${data.cliente} — ${fmtBRL(data.valor)} (venc. ${data.vencimento})`);
+      logAudit('Criou lançamento de caixa', `${cli.nome} — ${fmtBRL(data.valor)} (venc. ${data.vencimento})`);
       showToast('Lançamento adicionado — somado ao total de "' + ref.label + '"');
     }
   }
@@ -461,7 +458,7 @@ function App(){
 
   // ---------- Orçamentos ----------
   async function addOrcamento(data){
-    const cli = clientes.find(c=>c.nome===data.cliente);
+    const cli = clientes.find(c=>c.id===data.clienteId);
     if(!cli){ showToast('Cliente não encontrado.'); return; }
     const srv = servicos.find(s=>s.nome===data.item);
     const payload = orcamentoToRow({ clienteId: cli.id, servicoId: srv?srv.id:null, item:data.item, valor:data.valor, comissao:data.comissao, status:'Em análise' });
